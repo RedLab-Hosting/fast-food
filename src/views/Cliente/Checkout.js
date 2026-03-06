@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-lea
 import L from 'leaflet';
 import { db } from '../../services/firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { IconMapPin, IconMotorbike, IconShopping, IconCheckCircle, IconPhone, IconDollar, IconWarning } from '../../Components/Icons';
 
 // Icono personalizado para el Pin
 const iconoPin = new L.Icon({
@@ -72,13 +73,13 @@ function MapaUbicacion({ alCambiarUbicacion, posicionGPS }) {
         </MapContainer>
       </div>
       <p className="text-xs text-gray-500 p-2 bg-gray-100 rounded-b-xl italic">
-        Toca el mapa o mueve el pin para marcar tu ubicación 📍
+        Toca el mapa o mueve el pin para marcar tu ubicación
       </p>
     </div>
   );
 }
 
-function Checkout({ carrito, total, volver }) {
+function Checkout({ carrito, total, volver, onPedidoCreado }) {
   const [metodo, setMetodo] = useState('delivery');
   const [datos, setDatos] = useState(() => {
     // Auto-rellenar desde localStorage
@@ -164,7 +165,17 @@ function Checkout({ carrito, total, volver }) {
 
     const listaProductos = carrito.map(p => {
       const cant = p.cantidad || 1;
-      return `• ${p.nombre} x${cant} ($${(p.precio * cant).toFixed(2)})`;
+      const extraCost = p.extraTotal || 0;
+      const itemTotal = (Number(p.precio) + extraCost) * cant;
+      let line = `• ${p.nombre} x${cant} ($${itemTotal.toFixed(2)})`;
+      if (p.personalizaciones && p.personalizaciones.length > 0) {
+        const opciones = p.personalizaciones.map(o => `  ↳ ${o.label}${o.extra ? ` (+$${o.extra.toFixed(2)})` : ''}`).join('\n');
+        line += '\n' + opciones;
+      }
+      if (p.nota) {
+        line += `\n  📝 ${p.nota}`;
+      }
+      return line;
     }).join('\n');
 
     // Info de pago
@@ -180,13 +191,20 @@ function Checkout({ carrito, total, volver }) {
     // Guardar pedido en Firebase
     const clienteNombre = `${datos.nombre} ${datos.apellido}`;
     try {
-      await addDoc(collection(db, "pedidos"), {
+      const docRef = await addDoc(collection(db, "pedidos"), {
         cliente: clienteNombre,
         telefono: datos.telefono,
         metodo: metodo,
         direccion: metodo === 'delivery' ? datos.direccion : 'Pick-up en local',
         ubicacion: linkUbicacion || '',
-        items: carrito.map(p => ({ nombre: p.nombre, precio: p.precio, cantidad: p.cantidad || 1 })),
+        items: carrito.map(p => ({
+          nombre: p.nombre,
+          precio: p.precio,
+          cantidad: p.cantidad || 1,
+          personalizaciones: p.personalizaciones || [],
+          nota: p.nota || '',
+          extraTotal: p.extraTotal || 0,
+        })),
         total: total,
         metodoPago: metodoPago,
         pagaCon: metodoPago === 'efectivo' ? parseFloat(pagaCon) || 0 : 0,
@@ -195,6 +213,9 @@ function Checkout({ carrito, total, volver }) {
         estado: 'pendiente',
         fecha: serverTimestamp(),
       });
+
+      // Guardar ID del pedido para seguimiento
+      localStorage.setItem('pedido-activo-id', docRef.id);
     } catch (error) {
       console.error("Error guardando pedido:", error);
     }
@@ -219,6 +240,9 @@ ${metodoPago === 'efectivo' ? '_El repartidor lleva vuelto._' : '_Por favor, adj
 
     const url = `https://wa.me/584246603660?text=${encodeURIComponent(mensaje)}`;
     window.open(url, '_blank');
+
+    // Navegar al seguimiento
+    if (onPedidoCreado) onPedidoCreado();
   };
 
   return (
@@ -269,12 +293,12 @@ ${metodoPago === 'efectivo' ? '_El repartidor lleva vuelto._' : '_Por favor, adj
             <div className="flex gap-2 mt-1">
               <button
                 onClick={() => setMetodo('delivery')}
-                className={`flex-1 p-3 rounded-xl border-2 font-bold transition-all ${metodo === 'delivery' ? 'bg-kfc-red border-kfc-red text-white shadow-md' : 'bg-white border-gray-200 text-kfc-dark hover:border-kfc-red'}`}
-              >🛵 Delivery</button>
+                className={`flex-1 p-3 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-2 ${metodo === 'delivery' ? 'bg-kfc-red border-kfc-red text-white shadow-md' : 'bg-white border-gray-200 text-kfc-dark hover:border-kfc-red'}`}
+              ><IconMotorbike className="w-5 h-5" /> Delivery</button>
               <button
                 onClick={() => setMetodo('pickup')}
-                className={`flex-1 p-3 rounded-xl border-2 font-bold transition-all ${metodo === 'pickup' ? 'bg-kfc-red border-kfc-red text-white shadow-md' : 'bg-white border-gray-200 text-kfc-dark hover:border-kfc-red'}`}
-              >🛍️ Pick-up</button>
+                className={`flex-1 p-3 rounded-xl border-2 font-bold transition-all flex items-center justify-center gap-2 ${metodo === 'pickup' ? 'bg-kfc-red border-kfc-red text-white shadow-md' : 'bg-white border-gray-200 text-kfc-dark hover:border-kfc-red'}`}
+              ><IconShopping className="w-5 h-5" /> Pick-up</button>
             </div>
           </div>
 
@@ -290,12 +314,12 @@ ${metodoPago === 'efectivo' ? '_El repartidor lleva vuelto._' : '_Por favor, adj
               <button
                 type="button"
                 onClick={obtenerUbicacion}
-                className="mt-2 w-full bg-blue-500 text-white py-3 rounded-lg font-bold hover:bg-blue-600 transition-colors"
+                className="mt-2 w-full bg-blue-500 text-white py-3 rounded-lg font-bold hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
               >
-                📍 Obtener mi ubicación actual
+                <IconMapPin className="w-5 h-5" /> Obtener mi ubicación actual
               </button>
               {linkUbicacion && (
-                <p className="text-xs text-green-600 mt-2 font-medium">✅ Ubicación GPS capturada</p>
+                <p className="text-xs text-green-600 mt-2 font-medium flex items-center gap-1"><IconCheckCircle className="w-4 h-4" /> Ubicación GPS capturada</p>
               )}
 
               <MapaUbicacion
@@ -311,16 +335,16 @@ ${metodoPago === 'efectivo' ? '_El repartidor lleva vuelto._' : '_Por favor, adj
             <div className="flex gap-2 mt-1">
               <button
                 onClick={() => setMetodoPago('pago_movil')}
-                className={`flex-1 p-2 rounded-lg border text-sm font-bold ${metodoPago === 'pago_movil' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
-              >📱 Pago Móvil</button>
+                className={`flex-1 p-2 rounded-lg border text-sm font-bold flex items-center justify-center gap-1.5 ${metodoPago === 'pago_movil' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+              ><IconPhone className="w-4 h-4" /> Pago Móvil</button>
               <button
                 onClick={() => setMetodoPago('zelle')}
-                className={`flex-1 p-2 rounded-lg border text-sm font-bold ${metodoPago === 'zelle' ? 'bg-green-500 text-white' : 'bg-gray-100'}`}
-              >💵 Zelle</button>
+                className={`flex-1 p-2 rounded-lg border text-sm font-bold flex items-center justify-center gap-1.5 ${metodoPago === 'zelle' ? 'bg-green-500 text-white' : 'bg-gray-100'}`}
+              ><IconDollar className="w-4 h-4" /> Zelle</button>
               <button
                 onClick={() => setMetodoPago('efectivo')}
-                className={`flex-1 p-2 rounded-lg border text-sm font-bold ${metodoPago === 'efectivo' ? 'bg-yellow-500 text-white' : 'bg-gray-100'}`}
-              >💰 Efectivo</button>
+                className={`flex-1 p-2 rounded-lg border text-sm font-bold flex items-center justify-center gap-1.5 ${metodoPago === 'efectivo' ? 'bg-yellow-500 text-white' : 'bg-gray-100'}`}
+              ><IconDollar className="w-4 h-4" /> Efectivo</button>
             </div>
           </div>
 
@@ -344,7 +368,7 @@ ${metodoPago === 'efectivo' ? '_El repartidor lleva vuelto._' : '_Por favor, adj
                 </div>
               )}
               {pagaCon && parseFloat(pagaCon) < total && (
-                <p className="text-red-500 text-sm font-medium">⚠️ El monto es menor al total del pedido</p>
+                <p className="text-red-500 text-sm font-medium flex items-center gap-1"><IconWarning className="w-4 h-4" /> El monto es menor al total del pedido</p>
               )}
               <label className="flex items-center gap-2 cursor-pointer">
                 <input

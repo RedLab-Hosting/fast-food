@@ -5,8 +5,12 @@ import { onAuthStateChanged } from 'firebase/auth';
 import FormularioProducto from '../../Components/FormularioProducto';
 import LoginAdmin from './LoginAdmin';
 import { pedirPermisoNotificaciones, enviarNotificacion, getNotifPrefs, setNotifPrefs, useDetectarCambios } from '../../services/notificaciones';
+import { useTasa } from '../../hooks/useTasa';
+import { IconBell, IconLogout, IconClipboard, IconMotorbike, IconBurger, IconChart, IconDollar, IconPhone, IconMapPin, IconClock, IconStar, IconStarEmpty, IconCheckCircle, IconXCircle, IconRefresh, IconPlus, IconWarning, IconTruck } from '../../Components/Icons';
 
 function Admin() {
+  const { tasa, modo: modoTasa, ultimaActualizacion, cargando: cargandoTasa, error: errorTasa, actualizarBCV, guardarTasaManual, cambiarModo, aBs } = useTasa();
+  const [tasaManualInput, setTasaManualInput] = useState('');
   const [usuario, setUsuario] = useState(null);
   const [cargandoAuth, setCargandoAuth] = useState(true);
   const [tab, setTab] = useState('pedidos');
@@ -101,6 +105,12 @@ function Admin() {
     });
   };
 
+  const cancelarPedido = async (pedidoId) => {
+    if (window.confirm('¿Seguro que quieres cancelar este pedido?')) {
+      await updateDoc(doc(db, "pedidos", pedidoId), { estado: 'cancelado' });
+    }
+  };
+
   const aprobarDelivery = async (uid) => {
     await updateDoc(doc(db, "usuarios", uid), { aprobado: true });
   };
@@ -121,7 +131,7 @@ function Admin() {
       for (const p of entregados) {
         await deleteDoc(doc(db, "pedidos", p.id));
       }
-      alert(`✅ ${entregados.length} pedido(s) eliminado(s).`);
+      alert(`${entregados.length} pedido(s) eliminado(s) exitosamente.`);
     }
   };
 
@@ -134,12 +144,12 @@ function Admin() {
   const onCambiosPedidos = useCallback(({ nuevos, cambios }) => {
     nuevos.forEach(p => {
       if (notifConfig.nuevoPedido) {
-        enviarNotificacion('🍔 Nuevo Pedido!', { body: `${p.cliente} - $${p.total?.toFixed ? p.total.toFixed(2) : p.total}` });
+        enviarNotificacion('Nuevo Pedido!', { body: `${p.cliente} - $${p.total?.toFixed ? p.total.toFixed(2) : p.total}` });
       }
     });
     cambios.forEach(p => {
       if (notifConfig.cambioEstado) {
-        const estados = { asignado: '📦 Asignado', en_camino: '🛵 En camino', entregado: '✅ Entregado' };
+        const estados = { asignado: 'Asignado', en_camino: 'En camino', entregado: 'Entregado' };
         enviarNotificacion(`Pedido ${estados[p.estado] || p.estado}`, { body: `${p.cliente}` });
       }
     });
@@ -150,8 +160,8 @@ function Admin() {
   // Detectar deliveries que se ponen disponibles
   const onCambiosDeliveries = useCallback(({ cambios }) => {
     cambios.forEach(d => {
-      if (d.disponible && notifConfig.deliveryEnTienda) {
-        enviarNotificacion('🛵 Repartidor disponible', { body: `${d.nombre} está en la tienda` });
+      if (d.estadoDelivery === 'en_tienda' && notifConfig.deliveryEnTienda) {
+        enviarNotificacion('Repartidor disponible', { body: `${d.nombre} está en la tienda` });
       }
     });
   }, [notifConfig]);
@@ -176,41 +186,128 @@ function Admin() {
       case 'asignado': return 'bg-purple-100 text-purple-800';
       case 'en_camino': return 'bg-blue-100 text-blue-800';
       case 'entregado': return 'bg-green-100 text-green-800';
+      case 'cancelado': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const deliveriesDisponibles = deliveries.filter(d => d.disponible && d.aprobado);
+  const getEstadoTexto = (estado) => {
+    switch (estado) {
+      case 'pendiente': return 'Pendiente';
+      case 'asignado': return 'Asignado';
+      case 'en_camino': return 'En camino';
+      case 'entregado': return 'Entregado';
+      case 'cancelado': return 'Cancelado';
+      default: return estado;
+    }
+  };
+
+  const tiempoTranscurrido = (fecha) => {
+    if (!fecha) return '';
+    const ahora = new Date();
+    const fechaPedido = fecha.toDate ? fecha.toDate() : new Date(fecha);
+    const diffMs = ahora - fechaPedido;
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'Ahora mismo';
+    if (mins < 60) return `hace ${mins} min`;
+    const horas = Math.floor(mins / 60);
+    if (horas < 24) return `hace ${horas}h ${mins % 60}m`;
+    return `hace ${Math.floor(horas / 24)}d`;
+  };
+
+  const getColorTiempo = (fecha) => {
+    if (!fecha) return 'text-gray-400';
+    const fechaPedido = fecha.toDate ? fecha.toDate() : new Date(fecha);
+    const mins = Math.floor((new Date() - fechaPedido) / 60000);
+    if (mins < 15) return 'text-green-600';
+    if (mins < 30) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  // Estadísticas
+  const ahora = new Date();
+  const pedidosHoy = pedidos.filter(p => {
+    if (!p.fecha) return false;
+    const f = p.fecha.toDate ? p.fecha.toDate() : new Date(p.fecha);
+    return (ahora - f) / 3600000 < 24;
+  });
+  const pedidosSemana = pedidos.filter(p => {
+    if (!p.fecha) return false;
+    const f = p.fecha.toDate ? p.fecha.toDate() : new Date(p.fecha);
+    return (ahora - f) / 3600000 < 168;
+  });
+  const ingresosHoy = pedidosHoy.filter(p => p.estado === 'entregado').reduce((s, p) => s + (p.total || 0), 0);
+  const ingresosSemana = pedidosSemana.filter(p => p.estado === 'entregado').reduce((s, p) => s + (p.total || 0), 0);
+
+  // Delivery rankings
+  const deliveryConteo = {};
+  pedidosSemana.forEach(p => {
+    if (p.asignadoNombre) {
+      deliveryConteo[p.asignadoNombre] = (deliveryConteo[p.asignadoNombre] || 0) + 1;
+    }
+  });
+  const deliveryRanking = Object.entries(deliveryConteo).sort((a, b) => b[1] - a[1]);
+
+  const tiempoEntregaAdmin = (pedido) => {
+    if (!pedido.fechaEnCamino) return null;
+    const inicio = pedido.fechaEnCamino.toDate ? pedido.fechaEnCamino.toDate() : new Date(pedido.fechaEnCamino);
+    const fin = pedido.fechaEntregado
+      ? (pedido.fechaEntregado.toDate ? pedido.fechaEntregado.toDate() : new Date(pedido.fechaEntregado))
+      : new Date();
+    const mins = Math.floor((fin - inicio) / 60000);
+    if (mins < 1) return '< 1 min';
+    if (mins < 60) return `${mins} min`;
+    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  };
+
+  const deliveriesDisponibles = deliveries.filter(d => d.estadoDelivery === 'en_tienda' && d.aprobado);
   const deliveriesPendientes = deliveries.filter(d => !d.aprobado);
   const deliveriesAprobados = deliveries.filter(d => d.aprobado);
 
   return (
-    <div className="min-h-screen bg-kfc-gray p-4 md:p-8 font-sans">
-      <div className="max-w-5xl mx-auto">
-        <header className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-extrabold text-gray-800">Panel Admin 🛠️</h1>
+    <div className="min-h-screen bg-kfc-gray font-sans">
+      {/* Admin Header */}
+      <header className="bg-gradient-admin text-white px-4 md:px-8 py-5">
+        <div className="max-w-5xl mx-auto flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-black tracking-tight">Panel Admin</h1>
+            <p className="text-gray-400 text-xs font-medium mt-0.5">Gestión de pedidos y productos</p>
+          </div>
           <div className="flex items-center gap-3">
+            {tasa > 0 && (
+              <span className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-bold">
+                <IconDollar className="w-3.5 h-3.5" />
+                Bs {tasa.toFixed(2)}
+              </span>
+            )}
             <button
               onClick={() => setMostrarConfigNotif(!mostrarConfigNotif)}
-              className="text-gray-500 hover:text-gray-700 text-xl"
+              className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
               title="Configurar notificaciones"
             >
-              🔔
+              <IconBell className="w-5 h-5" />
             </button>
-            <button onClick={cerrarSesion} className="text-red-500 font-bold text-sm hover:underline">
-              Cerrar Sesión
+            <button
+              onClick={cerrarSesion}
+              className="px-4 py-2 rounded-xl bg-red-500/20 text-red-300 text-sm font-bold hover:bg-red-500/30 transition-colors flex items-center gap-1.5"
+            >
+              <IconLogout className="w-4 h-4" />
+              <span className="hidden sm:inline">Salir</span>
             </button>
           </div>
-        </header>
+        </div>
+      </header>
+
+      <div className="max-w-5xl mx-auto p-4 md:p-8">
 
         {/* Config notificaciones */}
         {mostrarConfigNotif && (
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-6 space-y-3">
-            <h3 className="font-bold text-gray-700">🔔 Notificaciones</h3>
+            <h3 className="font-bold text-gray-700 flex items-center gap-2"><IconBell className="w-4 h-4" /> Notificaciones</h3>
             {[
-              { key: 'nuevoPedido', label: '🍔 Nuevo pedido recibido' },
-              { key: 'cambioEstado', label: '📦 Cambio de estado de pedido' },
-              { key: 'deliveryEnTienda', label: '🛵 Repartidor en la tienda' },
+              { key: 'nuevoPedido', label: 'Nuevo pedido recibido' },
+              { key: 'cambioEstado', label: 'Cambio de estado de pedido' },
+              { key: 'deliveryEnTienda', label: 'Repartidor en la tienda' },
             ].map(item => (
               <label key={item.key} className="flex items-center justify-between cursor-pointer">
                 <span className="text-sm text-gray-600">{item.label}</span>
@@ -228,28 +325,29 @@ function Admin() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-gray-200 p-1 rounded-xl mb-6">
-          <button
-            onClick={() => setTab('pedidos')}
-            className={`flex-1 py-3 rounded-lg font-bold transition-all ${tab === 'pedidos' ? 'bg-white text-kfc-dark shadow-sm' : 'text-gray-500 hover:text-kfc-dark'
+        <div className="flex gap-1 bg-white p-1.5 rounded-2xl mb-6 shadow-card">
+          {[
+            { key: 'pedidos', Icon: IconClipboard, label: 'Pedidos', count: pedidos.length },
+            { key: 'repartidores', Icon: IconMotorbike, label: 'Repartidores', badge: deliveriesPendientes.length },
+            { key: 'productos', Icon: IconBurger, label: 'Productos' },
+            { key: 'tasa', Icon: IconDollar, label: 'Tasa' },
+            { key: 'estadisticas', Icon: IconChart, label: 'Stats' },
+          ].map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all btn-press flex items-center justify-center gap-1.5 ${
+                tab === t.key
+                  ? 'bg-kfc-dark text-white shadow-sm'
+                  : 'text-gray-500 hover:text-kfc-dark hover:bg-gray-50'
               }`}
-          >
-            📋 Pedidos ({pedidos.length})
-          </button>
-          <button
-            onClick={() => setTab('repartidores')}
-            className={`flex-1 py-3 rounded-lg font-bold transition-all ${tab === 'repartidores' ? 'bg-white text-kfc-dark shadow-sm' : 'text-gray-500 hover:text-kfc-dark'
-              }`}
-          >
-            🛵 Repartidores {deliveriesPendientes.length > 0 && <span className="bg-kfc-red text-white text-xs px-2 py-0.5 rounded-full ml-1">{deliveriesPendientes.length}</span>}
-          </button>
-          <button
-            onClick={() => setTab('productos')}
-            className={`flex-1 py-3 rounded-lg font-bold transition-all ${tab === 'productos' ? 'bg-white text-kfc-dark shadow-sm' : 'text-gray-500 hover:text-kfc-dark'
-              }`}
-          >
-            🍔 Productos ({productos.length})
-          </button>
+            >
+              <t.Icon className="w-4 h-4" />
+              <span className="hidden sm:inline">{t.label}</span>
+              {t.count > 0 && <span className="text-xs opacity-70">({t.count})</span>}
+              {t.badge > 0 && <span className="bg-kfc-red text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">{t.badge}</span>}
+            </button>
+          ))}
         </div>
 
         {/* TAB PEDIDOS */}
@@ -287,7 +385,7 @@ function Admin() {
                     onClick={limpiarEntregados}
                     className="text-sm bg-red-50 text-red-600 px-3 py-1 rounded-lg font-bold hover:bg-red-100 transition-colors"
                   >
-                    🗑️ Limpiar entregados
+                    Limpiar entregados
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -297,11 +395,12 @@ function Admin() {
                     onChange={(e) => setFiltroEstado(e.target.value)}
                     className="border rounded-lg px-3 py-2 text-sm font-medium bg-gray-50"
                   >
-                    <option value="todos">📋 Todos los estados</option>
-                    <option value="pendiente">⏳ Pendientes</option>
-                    <option value="asignado">📦 Asignados</option>
-                    <option value="en_camino">🛵 En camino</option>
-                    <option value="entregado">✅ Entregados</option>
+                    <option value="todos">Todos los estados</option>
+                    <option value="pendiente">Pendientes</option>
+                    <option value="asignado">Asignados</option>
+                    <option value="en_camino">En camino</option>
+                    <option value="entregado">Entregados</option>
+                    <option value="cancelado">Cancelados</option>
                   </select>
 
                   {/* Filtro fecha */}
@@ -310,9 +409,9 @@ function Admin() {
                     onChange={(e) => setFiltroFecha(e.target.value)}
                     className="border rounded-lg px-3 py-2 text-sm font-medium bg-gray-50"
                   >
-                    <option value="todos">📅 Todas las fechas</option>
-                    <option value="hoy">📆 Últimas 24h</option>
-                    <option value="semana">📅 Última semana</option>
+                    <option value="todos">Todas las fechas</option>
+                    <option value="hoy">Últimas 24h</option>
+                    <option value="semana">Última semana</option>
                   </select>
 
                   {/* Filtro repartidor */}
@@ -321,7 +420,7 @@ function Admin() {
                     onChange={(e) => setFiltroDelivery(e.target.value)}
                     className="border rounded-lg px-3 py-2 text-sm font-medium bg-gray-50"
                   >
-                    <option value="todos">🛵 Todos los repartidores</option>
+                    <option value="todos">Todos los repartidores</option>
                     {deliveriesAprobados.map((del) => (
                       <option key={del.uid} value={del.uid}>{del.nombre}</option>
                     ))}
@@ -332,7 +431,7 @@ function Admin() {
 
               {pedidosFiltrados.length === 0 ? (
                 <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
-                  <p className="text-4xl mb-3">📭</p>
+                <p className="text-4xl mb-3"><IconClipboard className="w-10 h-10 mx-auto text-gray-300" /></p>
                   <p className="text-gray-500">No hay pedidos con estos filtros</p>
                 </div>
               ) : (
@@ -342,13 +441,19 @@ function Admin() {
                       <div className="flex justify-between items-start mb-3">
                         <div>
                           <h3 className="font-bold text-lg">{pedido.cliente}</h3>
-                          <p className="text-sm text-gray-500">📞 {pedido.telefono} | {pedido.metodo === 'delivery' ? '🛵 Delivery' : '🛍️ Pick-up'}</p>
-                          {pedido.metodo === 'delivery' && <p className="text-sm text-gray-500 mt-1">📍 {pedido.direccion}</p>}
+                          <p className="text-sm text-gray-500 flex items-center gap-1"><IconPhone className="w-3.5 h-3.5" /> {pedido.telefono} | {pedido.metodo === 'delivery' ? 'Delivery' : 'Pick-up'}</p>
+                          {pedido.metodo === 'delivery' && <p className="text-sm text-gray-500 mt-1 flex items-center gap-1"><IconMapPin className="w-3.5 h-3.5" /> {pedido.direccion}</p>}
                         </div>
                         <span className={`px-3 py-1 rounded-full text-xs font-bold ${getEstadoColor(pedido.estado)}`}>
-                          {pedido.estado === 'pendiente' ? '⏳ Pendiente' : pedido.estado === 'asignado' ? '📦 Asignado' : pedido.estado === 'en_camino' ? '🛵 En camino' : '✅ Entregado'}
+                          {getEstadoTexto(pedido.estado)}
                         </span>
                       </div>
+                      {pedido.fecha && (
+                        <p className={`text-xs font-medium mt-1 ${getColorTiempo(pedido.fecha)}`}>
+                          <IconClock className="w-3.5 h-3.5 inline" /> {tiempoTranscurrido(pedido.fecha)}
+                          {pedido.estado === 'en_camino' && ' — En camino'}
+                        </p>
+                      )}
 
                       {/* Items */}
                       <div className="bg-gray-50 rounded-lg p-3 mb-3">
@@ -365,8 +470,24 @@ function Admin() {
                       </div>
 
                       {/* Asignación */}
-                      {pedido.asignadoNombre ? (
-                        <p className="text-sm text-kfc-dark font-medium">🛵 Asignado a: <span className="font-bold">{pedido.asignadoNombre}</span></p>
+                      {pedido.estado === 'cancelado' ? (
+                        <p className="text-sm text-red-600 font-medium flex items-center gap-1"><IconXCircle className="w-4 h-4" /> Pedido cancelado</p>
+                      ) : pedido.asignadoNombre ? (
+                        <div>
+                          <p className="text-sm text-kfc-dark font-medium flex items-center gap-1"><IconTruck className="w-4 h-4" /> Asignado a: <span className="font-bold">{pedido.asignadoNombre}</span></p>
+                          {pedido.estado === 'en_camino' && tiempoEntregaAdmin(pedido) && (
+                            <p className="text-xs text-blue-600 font-medium mt-1 flex items-center gap-1"><IconTruck className="w-3.5 h-3.5" /> En camino: {tiempoEntregaAdmin(pedido)}</p>
+                          )}
+                          {pedido.estado === 'entregado' && tiempoEntregaAdmin(pedido) && (
+                            <p className="text-xs text-green-600 font-medium mt-1 flex items-center gap-1"><IconCheckCircle className="w-3.5 h-3.5" /> Entregado en: {tiempoEntregaAdmin(pedido)}</p>
+                          )}
+                          {pedido.calificacion && (
+                            <p className="text-xs mt-1 flex items-center gap-0.5">
+                              {[1,2,3,4,5].map(n => n <= pedido.calificacion ? <IconStar key={n} className="w-3.5 h-3.5 text-yellow-500" /> : <IconStarEmpty key={n} className="w-3.5 h-3.5 text-gray-300" />)}
+                              <span className="ml-1 text-gray-500">({pedido.calificacion}/5)</span>
+                            </p>
+                          )}
+                        </div>
                       ) : pedido.estado === 'pendiente' && (
                         <div>
                           <p className="text-sm font-bold text-gray-700 mb-2">Asignar a repartidor:</p>
@@ -380,11 +501,17 @@ function Admin() {
                                   onClick={() => asignarPedido(pedido.id, del.uid, del.nombre)}
                                   className="bg-kfc-dark text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-800 transition-all shadow-sm"
                                 >
-                                  🛵 {del.nombre}
+                                  <span className="flex items-center gap-1"><IconTruck className="w-3.5 h-3.5" /> {del.nombre}</span>
                                 </button>
                               ))}
                             </div>
                           )}
+                          <button
+                            onClick={() => cancelarPedido(pedido.id)}
+                            className="mt-2 text-red-500 text-sm font-bold hover:underline"
+                          >
+                            <span className="flex items-center gap-1"><IconXCircle className="w-3.5 h-3.5" /> Cancelar pedido</span>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -402,7 +529,7 @@ function Admin() {
                 onClick={() => { setProductoEditar(null); setMostrarForm(true); }}
                 className="bg-kfc-red text-white px-6 py-2 rounded-lg font-bold shadow-md hover:bg-red-700 transition-all"
               >
-                + Nuevo Producto
+                <IconPlus className="w-4 h-4 inline" /> Nuevo Producto
               </button>
             </div>
 
@@ -466,7 +593,7 @@ function Admin() {
             {/* Solicitudes pendientes */}
             {deliveriesPendientes.length > 0 && (
               <div>
-                <h3 className="font-bold text-lg text-yellow-700 mb-3">⏳ Solicitudes Pendientes</h3>
+                <h3 className="font-bold text-lg text-yellow-700 mb-3 flex items-center gap-2"><IconClock className="w-5 h-5" /> Solicitudes Pendientes</h3>
                 <div className="space-y-3">
                   {deliveriesPendientes.map((del) => (
                     <div key={del.id} className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex justify-between items-center">
@@ -479,13 +606,13 @@ function Admin() {
                           onClick={() => aprobarDelivery(del.uid)}
                           className="bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-green-600"
                         >
-                          ✅ Aprobar
+                          <span className="flex items-center gap-1"><IconCheckCircle className="w-4 h-4" /> Aprobar</span>
                         </button>
                         <button
                           onClick={() => rechazarDelivery(del.uid)}
                           className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-600"
                         >
-                          ❌ Rechazar
+                          <span className="flex items-center gap-1"><IconXCircle className="w-4 h-4" /> Rechazar</span>
                         </button>
                       </div>
                     </div>
@@ -496,7 +623,7 @@ function Admin() {
 
             {/* Repartidores aprobados */}
             <div>
-              <h3 className="font-bold text-lg text-green-700 mb-3">✅ Repartidores Activos ({deliveriesAprobados.length})</h3>
+              <h3 className="font-bold text-lg text-green-700 mb-3 flex items-center gap-2"><IconCheckCircle className="w-5 h-5" /> Repartidores Activos ({deliveriesAprobados.length})</h3>
               {deliveriesAprobados.length === 0 ? (
                 <div className="bg-white rounded-xl p-6 text-center shadow-sm border border-gray-100">
                   <p className="text-gray-500">No hay repartidores aprobados aún</p>
@@ -508,9 +635,14 @@ function Admin() {
                       <div>
                         <p className="font-bold text-gray-800">{del.nombre}</p>
                         <p className="text-sm text-gray-500">{del.email}</p>
-                        <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-bold ${del.disponible ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                        <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                          del.estadoDelivery === 'en_tienda' ? 'bg-green-100 text-green-700' :
+                          del.estadoDelivery === 'entregando' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-gray-100 text-gray-500'
                           }`}>
-                          {del.disponible ? '🟢 En la tienda' : '⚪ No disponible'}
+                          {del.estadoDelivery === 'en_tienda' ? 'En la tienda' :
+                           del.estadoDelivery === 'entregando' ? 'Entregando' :
+                           'No disponible'}
                         </span>
                       </div>
                       <button
@@ -519,6 +651,151 @@ function Admin() {
                       >
                         Revocar
                       </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB TASA */}
+        {tab === 'tasa' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2"><IconDollar className="w-5 h-5 text-green-600" /> Tasa de Cambio USD / Bs</h3>
+
+              {/* Current rate display */}
+              {tasa > 0 && (
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 mb-5 border border-green-100">
+                  <p className="text-sm text-green-700 font-medium">Tasa actual</p>
+                  <p className="text-3xl font-black text-green-700">Bs {tasa.toFixed(2)}</p>
+                  {ultimaActualizacion && (
+                    <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
+                      <IconClock className="w-3 h-3" /> Actualizada: {new Date(ultimaActualizacion).toLocaleString('es-VE')}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Mode selector */}
+              <div className="flex gap-2 mb-5">
+                <button
+                  onClick={() => cambiarModo('bcv')}
+                  className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all btn-press ${modoTasa === 'bcv' ? 'bg-kfc-dark text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                >
+                  BCV Automática
+                </button>
+                <button
+                  onClick={() => cambiarModo('manual')}
+                  className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all btn-press ${modoTasa === 'manual' ? 'bg-kfc-dark text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                >
+                  Manual
+                </button>
+              </div>
+
+              {modoTasa === 'bcv' ? (
+                <div>
+                  <p className="text-sm text-gray-600 mb-3">La tasa se obtiene directamente del Banco Central de Venezuela (bcv.org.ve)</p>
+                  <button
+                    onClick={actualizarBCV}
+                    disabled={cargandoTasa}
+                    className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 disabled:bg-gray-300 transition-all btn-press flex items-center justify-center gap-2"
+                  >
+                    <IconRefresh className={`w-4 h-4 ${cargandoTasa ? 'animate-spin' : ''}`} />
+                    {cargandoTasa ? 'Consultando BCV...' : 'Actualizar desde BCV'}
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm text-gray-600 mb-3">Ingresa la tasa manualmente</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Ej: 431.01"
+                      value={tasaManualInput}
+                      onChange={(e) => setTasaManualInput(e.target.value)}
+                      className="flex-1 border border-gray-200 p-3 rounded-xl font-bold text-lg outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500 bg-gray-50"
+                    />
+                    <button
+                      onClick={() => { guardarTasaManual(tasaManualInput); setTasaManualInput(''); }}
+                      className="bg-green-600 text-white px-6 rounded-xl font-bold hover:bg-green-700 transition-all btn-press"
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {errorTasa && <p className="text-red-500 text-sm mt-3 font-medium flex items-center gap-1"><IconWarning className="w-4 h-4" /> {errorTasa}</p>}
+            </div>
+          </div>
+        )}
+
+        {/* TAB ESTADÍSTICAS */}
+        {tab === 'estadisticas' && (
+          <div className="space-y-6">
+            {/* Resumen */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
+                <p className="text-3xl font-black text-kfc-red">{pedidosHoy.length}</p>
+                <p className="text-xs text-gray-500 font-medium mt-1">Pedidos hoy</p>
+              </div>
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
+                <p className="text-3xl font-black text-green-600">${ingresosHoy.toFixed(2)}</p>
+                <p className="text-xs text-gray-500 font-medium mt-1">Ingresos hoy</p>
+              </div>
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
+                <p className="text-3xl font-black text-blue-600">{pedidosSemana.length}</p>
+                <p className="text-xs text-gray-500 font-medium mt-1">Pedidos semana</p>
+              </div>
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
+                <p className="text-3xl font-black text-purple-600">${ingresosSemana.toFixed(2)}</p>
+                <p className="text-xs text-gray-500 font-medium mt-1">Ingresos semana</p>
+              </div>
+            </div>
+
+            {/* Desglose por estado */}
+            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+              <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><IconChart className="w-5 h-5" /> Pedidos por estado</h3>
+              <div className="space-y-3">
+                {[
+                  { estado: 'pendiente', label: 'Pendientes', color: 'bg-yellow-400' },
+                  { estado: 'asignado', label: 'Asignados', color: 'bg-purple-400' },
+                  { estado: 'en_camino', label: 'En camino', color: 'bg-blue-400' },
+                  { estado: 'entregado', label: 'Entregados', color: 'bg-green-400' },
+                  { estado: 'cancelado', label: 'Cancelados', color: 'bg-red-400' },
+                ].map(item => {
+                  const count = pedidos.filter(p => p.estado === item.estado).length;
+                  const pct = pedidos.length > 0 ? (count / pedidos.length * 100) : 0;
+                  return (
+                    <div key={item.estado} className="flex items-center gap-3">
+                      <span className="text-sm font-medium w-32 shrink-0">{item.label}</span>
+                      <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                        <div className={`h-full ${item.color} rounded-full transition-all`} style={{ width: `${pct}%` }}></div>
+                      </div>
+                      <span className="text-sm font-bold w-8 text-right">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Ranking de deliveries */}
+            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+              <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><IconStar className="w-5 h-5 text-yellow-500" /> Repartidores (última semana)</h3>
+              {deliveryRanking.length === 0 ? (
+                <p className="text-gray-400 text-sm">No hay datos aún</p>
+              ) : (
+                <div className="space-y-2">
+                  {deliveryRanking.map(([nombre, count], i) => (
+                    <div key={nombre} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${i === 0 ? 'bg-yellow-400 text-yellow-900' : i === 1 ? 'bg-gray-300 text-gray-700' : i === 2 ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-500'}`}>{i + 1}</span>
+                        <span className="font-bold text-gray-800">{nombre}</span>
+                      </div>
+                      <span className="bg-kfc-red text-white px-3 py-1 rounded-full text-sm font-bold">{count} pedidos</span>
                     </div>
                   ))}
                 </div>

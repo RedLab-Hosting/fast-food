@@ -58,8 +58,8 @@ export const enviarNotificacion = (titulo, opciones = {}) => {
   crearSonido();
   if ('Notification' in window && Notification.permission === 'granted') {
     const notif = new Notification(titulo, {
-      icon: '🍔',
-      badge: '🍔',
+      icon: '/logo192.png',
+      badge: '/logo192.png',
       ...opciones,
     });
     // Cerrar automáticamente después de 5 segundos

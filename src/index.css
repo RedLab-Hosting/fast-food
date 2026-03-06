@@ -4,12 +4,85 @@
 
 @layer base {
   body {
-    background-color: #F8F9FA;
+    background-color: #F0F2F5;
     margin: 0;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    color: #202124;
+    color: #1A1A2E;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Better scrollbar hide for mobile category strips */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@layer components {
+  /* Glass effect for cards */
+  .glass {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Gradient backgrounds for panels */
+  .bg-gradient-brand {
+    background: linear-gradient(135deg, #E4002B 0%, #FF4757 50%, #E4002B 100%);
+  }
+
+  .bg-gradient-dark {
+    background: linear-gradient(135deg, #1A1A2E 0%, #16213E 50%, #0F3460 100%);
+  }
+
+  .bg-gradient-admin {
+    background: linear-gradient(135deg, #1A1A2E 0%, #2D2D44 100%);
+  }
+
+  .bg-gradient-delivery {
+    background: linear-gradient(135deg, #0F3460 0%, #1A1A2E 100%);
+  }
+
+  /* Product card animation */
+  .product-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .product-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  /* Button press effect */
+  .btn-press {
+    transition: all 0.15s ease;
+  }
+  .btn-press:active {
+    transform: scale(0.95);
+  }
+
+  /* Status pulse indicator */
+  .status-pulse {
+    position: relative;
+  }
+  .status-pulse::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    background: #22C55E;
+    border-radius: 50%;
+    animation: pulseSoft 2s ease-in-out infinite;
   }
 }
 

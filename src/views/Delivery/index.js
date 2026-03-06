@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { db, auth } from '../../services/firebase';
-import { collection, onSnapshot, doc, updateDoc, query, where, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, query, where, getDoc, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import LoginDelivery from './LoginDelivery';
 import { pedirPermisoNotificaciones, enviarNotificacion, getNotifPrefs, setNotifPrefs, useDetectarCambios } from '../../services/notificaciones';
+import { IconBell, IconLogout, IconMotorbike, IconClipboard, IconPackage, IconCheckCircle, IconPhone, IconMapPin, IconClock, IconStore, IconWarning, IconTruck } from '../../Components/Icons';
 
 function Delivery() {
   const [usuario, setUsuario] = useState(null);
@@ -71,23 +72,51 @@ function Delivery() {
     return () => unsub();
   }, [usuario]);
 
-  const toggleDisponible = async () => {
+  const toggleEstado = async () => {
     if (!perfil) return;
+    const estadoActual = perfil.estadoDelivery || 'no_disponible';
+    const nuevoEstado = estadoActual === 'no_disponible' ? 'en_tienda' : 'no_disponible';
     await updateDoc(doc(db, "usuarios", usuario.uid), {
-      disponible: !perfil.disponible,
+      estadoDelivery: nuevoEstado,
+      disponible: nuevoEstado === 'en_tienda',
+    });
+  };
+
+  const marcarEnTienda = async () => {
+    await updateDoc(doc(db, "usuarios", usuario.uid), {
+      estadoDelivery: 'en_tienda',
+      disponible: true,
     });
   };
 
   const cambiarEstado = async (id, nuevoEstado) => {
-    await updateDoc(doc(db, "pedidos", id), { estado: nuevoEstado });
-    // Si sale en camino, desactivar disponibilidad para no recibir más pedidos
+    const updates = { estado: nuevoEstado };
     if (nuevoEstado === 'en_camino') {
-      await updateDoc(doc(db, "usuarios", usuario.uid), { disponible: false });
+      updates.fechaEnCamino = serverTimestamp();
+      await updateDoc(doc(db, "usuarios", usuario.uid), {
+        estadoDelivery: 'entregando',
+        disponible: false,
+      });
     }
-    // Si entrega, volver a ponerse disponible
     if (nuevoEstado === 'entregado') {
-      await updateDoc(doc(db, "usuarios", usuario.uid), { disponible: true });
+      updates.fechaEntregado = serverTimestamp();
     }
+    await updateDoc(doc(db, "pedidos", id), updates);
+  };
+
+  // Check if delivery has active orders (asignado or en_camino)
+  const tienePedidoActivo = pedidos.some(p => p.estado === 'asignado' || p.estado === 'en_camino');
+
+  const tiempoEntrega = (pedido) => {
+    if (!pedido.fechaEnCamino) return null;
+    const inicio = pedido.fechaEnCamino.toDate ? pedido.fechaEnCamino.toDate() : new Date(pedido.fechaEnCamino);
+    const fin = pedido.fechaEntregado
+      ? (pedido.fechaEntregado.toDate ? pedido.fechaEntregado.toDate() : new Date(pedido.fechaEntregado))
+      : new Date();
+    const mins = Math.floor((fin - inicio) / 60000);
+    if (mins < 1) return '< 1 min';
+    if (mins < 60) return `${mins} min`;
+    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
   };
 
   const cerrarSesion = () => {
@@ -100,7 +129,7 @@ function Delivery() {
   const onCambiosPedidos = useCallback(({ nuevos }) => {
     nuevos.forEach(p => {
       if (notifConfig.pedidoAsignado) {
-        enviarNotificacion('📦 Nuevo pedido asignado!', { body: `${p.cliente} - $${p.total?.toFixed ? p.total.toFixed(2) : p.total}` });
+        enviarNotificacion('Nuevo pedido asignado!', { body: `${p.cliente} - $${p.total?.toFixed ? p.total.toFixed(2) : p.total}` });
       }
     });
   }, [notifConfig]);
@@ -142,33 +171,41 @@ function Delivery() {
     : pedidos.filter(p => p.estado === filtro);
 
   return (
-    <div className="min-h-screen bg-kfc-gray p-4 md:p-8 font-sans">
-      <div className="max-w-4xl mx-auto">
-        <header className="flex justify-between items-center mb-4">
+    <div className="min-h-screen bg-kfc-gray font-sans">
+      {/* Delivery Header */}
+      <header className="bg-gradient-delivery text-white px-4 md:px-8 py-5">
+        <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-800">🛵 Delivery</h1>
-            <p className="text-gray-500 text-sm">Hola, {perfil.nombre}</p>
+            <h1 className="text-2xl font-black tracking-tight flex items-center gap-2"><IconMotorbike className="w-6 h-6" /> Delivery</h1>
+            <p className="text-blue-300 text-xs font-medium mt-0.5">Hola, {perfil.nombre}</p>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMostrarConfigNotif(!mostrarConfigNotif)}
-              className="text-gray-500 hover:text-gray-700 text-xl"
+              className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
               title="Configurar notificaciones"
             >
-              🔔
+              <IconBell className="w-5 h-5" />
             </button>
-            <button onClick={cerrarSesion} className="text-red-500 font-bold text-sm hover:underline">
-              Salir
+            <button
+              onClick={cerrarSesion}
+              className="px-4 py-2 rounded-xl bg-red-500/20 text-red-300 text-sm font-bold hover:bg-red-500/30 transition-colors flex items-center gap-1.5"
+            >
+              <IconLogout className="w-4 h-4" />
+              <span className="hidden sm:inline">Salir</span>
             </button>
           </div>
-        </header>
+        </div>
+      </header>
+
+      <div className="max-w-4xl mx-auto p-4 md:p-8">
 
         {/* Config notificaciones */}
         {mostrarConfigNotif && (
           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-6 space-y-3">
-            <h3 className="font-bold text-gray-700">🔔 Notificaciones</h3>
+            <h3 className="font-bold text-gray-700 flex items-center gap-2"><IconBell className="w-4 h-4" /> Notificaciones</h3>
             <label className="flex items-center justify-between cursor-pointer">
-              <span className="text-sm text-gray-600">📦 Pedido asignado</span>
+              <span className="text-sm text-gray-600">Pedido asignado</span>
               <div
                 onClick={() => guardarNotifConfig('pedidoAsignado', !notifConfig.pedidoAsignado)}
                 className={`w-12 h-7 rounded-full p-1 transition-all cursor-pointer ${notifConfig.pedidoAsignado ? 'bg-green-500' : 'bg-gray-300'
@@ -181,55 +218,77 @@ function Delivery() {
           </div>
         )}
 
-        {/* Toggle disponibilidad */}
-        <div
-          onClick={toggleDisponible}
-          className={`p-4 rounded-2xl mb-6 cursor-pointer transition-all ${perfil.disponible
-              ? 'bg-green-100 border-2 border-green-400'
-              : 'bg-gray-100 border-2 border-gray-300'
-            }`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-bold text-lg">
-                {perfil.disponible ? '✅ Estoy en la tienda' : '❌ No disponible'}
-              </p>
-              <p className="text-sm text-gray-500">Toca para cambiar tu estado</p>
+        {/* Estado del delivery - 3 estados */}
+        {(() => {
+          const estado = perfil.estadoDelivery || 'no_disponible';
+          const estilos = {
+            en_tienda: { bg: 'bg-green-100 border-green-400', text: 'Estoy en la tienda', dot: 'bg-green-500' },
+            entregando: { bg: 'bg-yellow-100 border-yellow-400', text: 'Entregando pedido', dot: 'bg-yellow-500' },
+            no_disponible: { bg: 'bg-gray-100 border-gray-300', text: 'No disponible', dot: 'bg-gray-400' },
+          };
+          const estilo = estilos[estado] || estilos.no_disponible;
+          return (
+            <div className="mb-6 space-y-3">
+              <div
+                onClick={estado !== 'entregando' ? toggleEstado : undefined}
+                className={`p-4 rounded-2xl transition-all border-2 ${estilo.bg} ${estado !== 'entregando' ? 'cursor-pointer' : 'cursor-not-allowed opacity-80'}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-lg">{estilo.text}</p>
+                    <p className="text-sm text-gray-500">
+                      {estado === 'entregando' ? 'Toca "Ya llegué" cuando regreses' : 'Toca para cambiar tu estado'}
+                    </p>
+                  </div>
+                  <div className={`w-4 h-4 rounded-full ${estilo.dot}`}></div>
+                </div>
+              </div>
+              {estado === 'entregando' && !tienePedidoActivo && (
+                <button
+                  onClick={marcarEnTienda}
+                  className="w-full bg-green-500 text-white py-3 rounded-xl font-bold hover:bg-green-600 active:scale-95 transition-all text-lg"
+                >
+                  <span className="flex items-center gap-1.5"><IconStore className="w-5 h-5" /> Ya llegué a la tienda</span>
+                </button>
+              )}
+              {estado === 'entregando' && tienePedidoActivo && (
+                <p className="text-center text-yellow-600 text-sm font-medium bg-yellow-50 p-3 rounded-xl">
+                  <span className="flex items-center gap-1.5"><IconWarning className="w-4 h-4" /> Entrega tu pedido activo antes de marcar que llegaste</span>
+                </p>
+              )}
             </div>
-            <div className={`w-14 h-8 rounded-full p-1 transition-all ${perfil.disponible ? 'bg-green-500' : 'bg-gray-400'
-              }`}>
-              <div className={`w-6 h-6 bg-white rounded-full shadow-md transition-transform ${perfil.disponible ? 'translate-x-6' : 'translate-x-0'
-                }`}></div>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* Filtros */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
           {[
-            { key: 'todos', label: '📋 Todos', count: pedidos.length },
-            { key: 'asignado', label: '📦 Asignados', count: pedidos.filter(p => p.estado === 'asignado').length },
-            { key: 'en_camino', label: '🛵 En camino', count: pedidos.filter(p => p.estado === 'en_camino').length },
-            { key: 'entregado', label: '✅ Entregados', count: pedidos.filter(p => p.estado === 'entregado').length },
+            { key: 'todos', label: 'Todos', Icon: IconClipboard, count: pedidos.length },
+            { key: 'asignado', label: 'Asignados', Icon: IconPackage, count: pedidos.filter(p => p.estado === 'asignado').length },
+            { key: 'en_camino', label: 'En camino', Icon: IconTruck, count: pedidos.filter(p => p.estado === 'en_camino').length },
+            { key: 'entregado', label: 'Entregados', Icon: IconCheckCircle, count: pedidos.filter(p => p.estado === 'entregado').length },
           ].map(f => (
             <button
               key={f.key}
               onClick={() => setFiltro(f.key)}
-              className={`px-5 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all border-2 ${filtro === f.key
-                  ? 'bg-kfc-red border-kfc-red text-white shadow-md'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-kfc-red hover:text-kfc-red'
-                }`}
+              className={`px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all btn-press flex items-center gap-1.5 ${
+                filtro === f.key
+                  ? 'bg-kfc-dark text-white shadow-sm'
+                  : 'bg-white text-gray-600 shadow-card hover:shadow-card-hover'
+              }`}
             >
-              {f.label} ({f.count})
+              <f.Icon className="w-4 h-4" /> {f.label}
+              {f.count > 0 && <span className="text-xs opacity-70">({f.count})</span>}
             </button>
           ))}
         </div>
+
 
         {/* Lista de pedidos */}
         <div className="space-y-4">
           {pedidosFiltrados.length === 0 ? (
             <div className="bg-white rounded-2xl p-10 text-center shadow-sm border border-gray-100">
-              <p className="text-4xl mb-3">📭</p>
+              <p className="text-4xl mb-3"><IconClipboard className="w-10 h-10 mx-auto text-gray-300" /></p>
               <p className="text-gray-500 font-medium">
                 {pedidos.length === 0 ? 'Aún no te han asignado pedidos' : 'No hay pedidos en esta categoría'}
               </p>
@@ -242,17 +301,17 @@ function Delivery() {
                     <div>
                       <h3 className="font-bold text-lg text-gray-800">{pedido.cliente}</h3>
                       <div className="flex items-center gap-2 mt-1">
-                        <p className="text-sm text-gray-500">📞 {pedido.telefono}</p>
+                        <p className="text-sm text-gray-500 flex items-center gap-1"><IconPhone className="w-3.5 h-3.5" /> {pedido.telefono}</p>
                         <a
                           href={`tel:${pedido.telefono}`}
-                          className="bg-green-500 text-white px-3 py-1 rounded-lg text-xs font-bold hover:bg-green-600"
+                          className="bg-green-500 text-white px-3 py-1 rounded-lg text-xs font-bold hover:bg-green-600 flex items-center gap-1"
                         >
-                          📞 Llamar
+                          <IconPhone className="w-3 h-3" /> Llamar
                         </a>
                       </div>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getEstadoColor(pedido.estado)}`}>
-                      {pedido.estado === 'asignado' ? '📦 Asignado' : pedido.estado === 'en_camino' ? '🛵 En camino' : '✅ Entregado'}
+                      {pedido.estado === 'asignado' ? 'Asignado' : pedido.estado === 'en_camino' ? 'En camino' : 'Entregado'}
                     </span>
                   </div>
                 </div>
@@ -275,13 +334,13 @@ function Delivery() {
                 {pedido.metodoPago && (
                   <div className="px-5 py-2 border-t border-gray-100 bg-blue-50">
                     <p className="text-sm font-medium text-blue-800">
-                      💳 {pedido.metodoPago === 'pago_movil' ? '📱 Pago Móvil' : pedido.metodoPago === 'zelle' ? '💵 Zelle' : '💰 Efectivo USD'}
+                        {pedido.metodoPago === 'pago_movil' ? 'Pago Móvil' : pedido.metodoPago === 'zelle' ? 'Zelle' : 'Efectivo USD'}
                     </p>
                     {pedido.metodoPago === 'efectivo' && pedido.pagaCon > 0 && (
                       <div className="flex gap-4 text-xs mt-1">
                         <span>Paga con: <b>${pedido.pagaCon?.toFixed ? pedido.pagaCon.toFixed(2) : pedido.pagaCon}</b></span>
                         <span>Vuelto: <b className="text-green-700">${pedido.vuelto?.toFixed ? pedido.vuelto.toFixed(2) : pedido.vuelto}</b></span>
-                        {pedido.necesitaVuelto && <span className="text-red-600 font-bold">⚠️ Llevar vuelto</span>}
+                        {pedido.necesitaVuelto && <span className="text-red-600 font-bold flex items-center gap-1"><IconWarning className="w-3.5 h-3.5" /> Llevar vuelto</span>}
                       </div>
                     )}
                   </div>
@@ -290,15 +349,15 @@ function Delivery() {
                 {/* Dirección y Mapa */}
                 {pedido.metodo === 'delivery' && (
                   <div className="px-5 py-3 border-t border-gray-100">
-                    <p className="text-sm text-gray-600 mb-2">📍 {pedido.direccion}</p>
+                    <p className="text-sm text-gray-600 mb-2 flex items-center gap-1"><IconMapPin className="w-4 h-4" /> {pedido.direccion}</p>
                     {pedido.ubicacion && (
                       <a
                         href={pedido.ubicacion}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-block bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-600 transition-colors"
+                        className="inline-flex items-center gap-1.5 bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-600 transition-colors"
                       >
-                        🗺️ Abrir en Google Maps
+                        <IconMapPin className="w-4 h-4" /> Abrir en Google Maps
                       </a>
                     )}
                   </div>
@@ -311,20 +370,30 @@ function Delivery() {
                       onClick={() => cambiarEstado(pedido.id, 'en_camino')}
                       className="w-full bg-blue-500 text-white py-3 rounded-xl font-bold hover:bg-blue-600 active:scale-95 transition-all"
                     >
-                      🛵 Estoy en camino
+                      <span className="flex items-center gap-1.5 justify-center"><IconTruck className="w-5 h-5" /> Estoy en camino</span>
                     </button>
                   )}
                   {pedido.estado === 'en_camino' && (
-                    <button
-                      onClick={() => cambiarEstado(pedido.id, 'entregado')}
-                      className="w-full bg-green-500 text-white py-3 rounded-xl font-bold hover:bg-green-600 active:scale-95 transition-all"
-                    >
-                      ✅ Marcar Entregado
-                    </button>
+                    <div>
+                      <button
+                        onClick={() => cambiarEstado(pedido.id, 'entregado')}
+                        className="w-full bg-green-500 text-white py-3 rounded-xl font-bold hover:bg-green-600 active:scale-95 transition-all"
+                      >
+                        <span className="flex items-center gap-1.5 justify-center"><IconCheckCircle className="w-5 h-5" /> Marcar Entregado</span>
+                      </button>
+                      {tiempoEntrega(pedido) && (
+                        <p className="text-center text-sm text-blue-600 font-medium mt-2 flex items-center gap-1 justify-center"><IconTruck className="w-4 h-4" /> En camino: {tiempoEntrega(pedido)}</p>
+                      )}
+                    </div>
                   )}
                   {pedido.estado === 'entregado' && (
-                    <p className="text-center text-green-600 font-bold py-2">✅ Pedido completado</p>
-                  )}
+                  <div className="text-center py-2">
+                    <p className="text-green-600 font-bold flex items-center gap-1 justify-center"><IconCheckCircle className="w-5 h-5" /> Pedido completado</p>
+                    {tiempoEntrega(pedido) && (
+                      <p className="text-sm text-gray-500 mt-1 flex items-center gap-1 justify-center"><IconClock className="w-4 h-4" /> Tiempo de entrega: <span className="font-bold">{tiempoEntrega(pedido)}</span></p>
+                    )}
+                  </div>
+                )}
                 </div>
               </div>
             ))
