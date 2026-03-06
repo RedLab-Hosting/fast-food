@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { IconCheckCircle } from './Icons';
 
 function SwipeSlider({ onSwipeSuccess, text = "Desliza cuando entregues el pedido" }) {
