@@ -6,7 +6,7 @@ import FormularioProducto from '../../Components/FormularioProducto';
 import LoginAdmin from './LoginAdmin';
 import { pedirPermisoNotificaciones, enviarNotificacion, getNotifPrefs, setNotifPrefs, useDetectarCambios } from '../../services/notificaciones';
 import { useTasa } from '../../hooks/useTasa';
-import { IconBell, IconLogout, IconClipboard, IconMotorbike, IconBurger, IconChart, IconDollar, IconPhone, IconMapPin, IconClock, IconStar, IconStarEmpty, IconCheckCircle, IconXCircle, IconRefresh, IconPlus, IconWarning, IconTruck } from '../../Components/Icons';
+import { IconBell, IconLogout, IconClipboard, IconMotorbike, IconBurger, IconChart, IconDollar, IconPhone, IconMapPin, IconClock, IconStar, IconStarEmpty, IconCheckCircle, IconXCircle, IconRefresh, IconPlus, IconWarning, IconTruck, IconCopy, IconMessageCircle } from '../../Components/Icons';
 
 function Admin() {
   const { tasa, modo: modoTasa, ultimaActualizacion, cargando: cargandoTasa, error: errorTasa, actualizarBCV, guardarTasaManual, cambiarModo, aBs } = useTasa();
@@ -19,6 +19,13 @@ function Admin() {
   const [deliveries, setDeliveries] = useState([]);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [productoEditar, setProductoEditar] = useState(null);
+  const [ajustes, setAjustes] = useState({ permitirRechazarPedidos: false });
+  const [pedidoACancelar, setPedidoACancelar] = useState(null); // ID of the order being cancelled
+
+  const copiarTexto = (texto) => {
+    navigator.clipboard.writeText(texto);
+    alert('Teléfono copiado al portapapeles');
+  };
 
   // Filtros de pedidos
   const [filtroEstado, setFiltroEstado] = useState('todos');
@@ -91,10 +98,25 @@ function Admin() {
     return () => unsub();
   }, [usuario]);
 
+  // Leer ajustes generales
+  useEffect(() => {
+    if (!usuario) return;
+    const unsub = onSnapshot(doc(db, "config", "ajustes"), (snap) => {
+      if (snap.exists()) setAjustes(snap.data());
+    });
+    return () => unsub();
+  }, [usuario]);
+
   const eliminarProducto = async (id) => {
     if (window.confirm("¿Seguro que quieres eliminar este producto?")) {
       await deleteDoc(doc(db, "productos", id));
     }
+  };
+
+  const toggleRechazarPedidos = async () => {
+    await updateDoc(doc(db, "config", "ajustes"), {
+      permitirRechazarPedidos: !ajustes.permitirRechazarPedidos
+    });
   };
 
   const asignarPedido = async (pedidoId, deliveryUid, deliveryNombre) => {
@@ -106,9 +128,8 @@ function Admin() {
   };
 
   const cancelarPedido = async (pedidoId) => {
-    if (window.confirm('¿Seguro que quieres cancelar este pedido?')) {
-      await updateDoc(doc(db, "pedidos", pedidoId), { estado: 'cancelado' });
-    }
+    await updateDoc(doc(db, "pedidos", pedidoId), { estado: 'cancelado' });
+    setPedidoACancelar(null);
   };
 
   const aprobarDelivery = async (uid) => {
@@ -181,6 +202,17 @@ function Admin() {
   }
 
   const getEstadoColor = (estado) => {
+    switch (estado) {
+      case 'pendiente': return 'border-l-4 border-l-yellow-400';
+      case 'asignado': return 'border-l-4 border-l-purple-500';
+      case 'en_camino': return 'border-l-4 border-l-blue-500';
+      case 'entregado': return 'border-l-4 border-l-green-500 opacity-60';
+      case 'cancelado': return 'border-l-4 border-l-red-500 opacity-60';
+      default: return 'border-l-4 border-l-gray-400';
+    }
+  };
+
+  const getBadgeColor = (estado) => {
     switch (estado) {
       case 'pendiente': return 'bg-yellow-100 text-yellow-800';
       case 'asignado': return 'bg-purple-100 text-purple-800';
@@ -375,6 +407,15 @@ function Admin() {
             });
           }
 
+          // Agrupar los pedidos
+          const grupos = [
+            { titulo: 'Pendientes', clave: 'pendiente', pedidos: pedidosFiltrados.filter(p => p.estado === 'pendiente') },
+            { titulo: 'Asignados', clave: 'asignado', pedidos: pedidosFiltrados.filter(p => p.estado === 'asignado') },
+            { titulo: 'En camino', clave: 'en_camino', pedidos: pedidosFiltrados.filter(p => p.estado === 'en_camino') },
+            { titulo: 'Entregados', clave: 'entregado', pedidos: pedidosFiltrados.filter(p => p.estado === 'entregado') },
+            { titulo: 'Cancelados', clave: 'cancelado', pedidos: pedidosFiltrados.filter(p => p.estado === 'cancelado') }
+          ].filter(g => g.pedidos.length > 0);
+
           return (
             <div className="space-y-4">
               {/* Barra de filtros */}
@@ -435,19 +476,48 @@ function Admin() {
                   <p className="text-gray-500">No hay pedidos con estos filtros</p>
                 </div>
               ) : (
-                pedidosFiltrados.map((pedido) => (
-                  <div key={pedido.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-5">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h3 className="font-bold text-lg">{pedido.cliente}</h3>
-                          <p className="text-sm text-gray-500 flex items-center gap-1"><IconPhone className="w-3.5 h-3.5" /> {pedido.telefono} | {pedido.metodo === 'delivery' ? 'Delivery' : 'Pick-up'}</p>
-                          {pedido.metodo === 'delivery' && <p className="text-sm text-gray-500 mt-1 flex items-center gap-1"><IconMapPin className="w-3.5 h-3.5" /> {pedido.direccion}</p>}
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${getEstadoColor(pedido.estado)}`}>
-                          {getEstadoTexto(pedido.estado)}
-                        </span>
-                      </div>
+                grupos.map(grupo => (
+                  <div key={grupo.clave} className="space-y-3">
+                    <h2 className="text-lg font-black text-gray-700 mt-6 pb-2 border-b border-gray-200">
+                      {grupo.titulo} <span className="text-sm font-medium text-gray-400">({grupo.pedidos.length})</span>
+                    </h2>
+                    
+                    {grupo.pedidos.map((pedido) => (
+                      <div key={pedido.id} className={`bg-white rounded-2xl shadow-sm overflow-hidden ${getEstadoColor(pedido.estado)} transition-all duration-300 hover:shadow-md`}>
+                        <div className="p-5">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-bold text-lg">{pedido.cliente}</h3>
+                                {pedido.estado === 'pendiente' && (() => {
+                                  if (!pedido.fecha) return null;
+                                  const f = pedido.fecha.toDate ? pedido.fecha.toDate() : new Date(pedido.fecha);
+                                  const m = Math.floor((new Date() - f) / 60000);
+                                  if (m < 5) return <span className="bg-red-500 text-white text-[10px] uppercase font-black px-2 py-0.5 rounded-full animate-pulse">¡NUEVO!</span>;
+                                  return null;
+                                })()}
+                              </div>
+                              <div className="flex items-center gap-3 mt-1">
+                                <p className="text-sm font-bold text-gray-700">{pedido.telefono}</p>
+                                <div className="flex gap-1.5">
+                                  <a href={`tel:${pedido.telefono}`} title="Llamar" className="w-7 h-7 bg-green-100 text-green-600 rounded-full flex items-center justify-center hover:bg-green-200 transition-colors">
+                                    <IconPhone className="w-3.5 h-3.5" />
+                                  </a>
+                                  <a href={`https://wa.me/${pedido.telefono.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="w-7 h-7 bg-green-100 text-green-600 rounded-full flex items-center justify-center hover:bg-green-200 transition-colors">
+                                    <IconMessageCircle className="w-3.5 h-3.5" />
+                                  </a>
+                                  <button onClick={() => copiarTexto(pedido.telefono)} title="Copiar" className="w-7 h-7 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors border border-gray-200">
+                                    <IconCopy className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">{pedido.metodo === 'delivery' ? 'Delivery' : 'Pick-up'}</p>
+                              {pedido.metodo === 'delivery' && <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5"><IconMapPin className="w-3.5 h-3.5 text-blue-500" /> {pedido.direccion}</p>}
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${getBadgeColor(pedido.estado)}`}>
+                              {getEstadoTexto(pedido.estado)}
+                            </span>
+                          </div>
                       {pedido.fecha && (
                         <p className={`text-xs font-medium mt-1 ${getColorTiempo(pedido.fecha)}`}>
                           <IconClock className="w-3.5 h-3.5 inline" /> {tiempoTranscurrido(pedido.fecha)}
@@ -506,15 +576,28 @@ function Admin() {
                               ))}
                             </div>
                           )}
-                          <button
-                            onClick={() => cancelarPedido(pedido.id)}
-                            className="mt-2 text-red-500 text-sm font-bold hover:underline"
-                          >
-                            <span className="flex items-center gap-1"><IconXCircle className="w-3.5 h-3.5" /> Cancelar pedido</span>
-                          </button>
-                        </div>
-                      )}
+                            <button
+                              onClick={() => setPedidoACancelar(pedido.id)}
+                              className="mt-4 text-gray-400 text-sm font-bold hover:text-red-500 transition-colors"
+                            >
+                              <span className="flex items-center gap-1"><IconXCircle className="w-3.5 h-3.5" /> Cancelar pedido</span>
+                            </button>
+                            
+                            {/* Two-step confirm cancel guard */}
+                            {pedidoACancelar === pedido.id && (
+                              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl space-y-3 animate-slide-in">
+                                <p className="text-sm font-bold text-red-700 flex items-center gap-1.5"><IconWarning className="w-4 h-4" /> ¿Seguro que quieres cancelar este pedido?</p>
+                                <div className="flex gap-2">
+                                  <button onClick={() => cancelarPedido(pedido.id)} className="flex-1 bg-red-500 text-white rounded-lg py-2 text-sm font-bold hover:bg-red-600 transition-colors">Sí, cancelar</button>
+                                  <button onClick={() => setPedidoACancelar(null)} className="flex-1 bg-gray-200 text-gray-700 rounded-lg py-2 text-sm font-bold hover:bg-gray-300 transition-colors">No, volver</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
+                  ))}
                   </div>
                 ))
               )}
@@ -659,7 +742,7 @@ function Admin() {
           </div>
         )}
 
-        {/* TAB TASA */}
+        {/* TAB CONFIGURACIONES */}
         {tab === 'tasa' && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
@@ -729,6 +812,27 @@ function Admin() {
               )}
 
               {errorTasa && <p className="text-red-500 text-sm mt-3 font-medium flex items-center gap-1"><IconWarning className="w-4 h-4" /> {errorTasa}</p>}
+            </div>
+
+            {/* Ajustes Generales Panel */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+                 <IconWarning className="w-5 h-5 text-orange-500" /> Ajustes Básicos
+              </h3>
+              <label className="flex items-center justify-between cursor-pointer p-4 border border-gray-100 rounded-xl hover:bg-gray-50">
+                <div>
+                  <span className="text-sm font-bold text-gray-800 block">Permitir que repartidores rechacen pedidos</span>
+                  <span className="text-xs text-gray-500">Muestra un botón de "Rechazar" cuando se les asigne un nuevo pedido.</span>
+                </div>
+                <div
+                  onClick={toggleRechazarPedidos}
+                  className={`w-12 h-7 rounded-full p-1 transition-all cursor-pointer shadow-inner flex-shrink-0 ${ajustes?.permitirRechazarPedidos ? 'bg-green-500' : 'bg-gray-300'
+                    }`}
+                >
+                  <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform ${ajustes?.permitirRechazarPedidos ? 'translate-x-5' : 'translate-x-0'
+                    }`}></div>
+                </div>
+              </label>
             </div>
           </div>
         )}
