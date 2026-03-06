@@ -13,9 +13,13 @@ export async function fetchTasaBCV() {
 
   for (const proxy of CORS_PROXIES) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const resp = await fetch(proxy + encodeURIComponent(BCV_URL), {
-        signal: AbortSignal.timeout(10000),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const html = await resp.text();
 
       // Parse the dollar rate from BCV HTML
