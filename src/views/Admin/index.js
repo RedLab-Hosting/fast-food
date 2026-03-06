@@ -9,7 +9,7 @@ import { useTasa } from '../../hooks/useTasa';
 import { IconBell, IconLogout, IconClipboard, IconMotorbike, IconBurger, IconChart, IconDollar, IconPhone, IconMapPin, IconClock, IconStar, IconStarEmpty, IconCheckCircle, IconXCircle, IconRefresh, IconPlus, IconWarning, IconTruck, IconCopy, IconMessageCircle } from '../../Components/Icons';
 
 function Admin() {
-  const { tasa, modo: modoTasa, ultimaActualizacion, cargando: cargandoTasa, error: errorTasa, actualizarBCV, guardarTasaManual, cambiarModo, aBs } = useTasa();
+  const { tasa, modo: modoTasa, ultimaActualizacion, cargando: cargandoTasa, error: errorTasa, actualizarBCV, guardarTasaManual, cambiarModo } = useTasa();
   const [tasaManualInput, setTasaManualInput] = useState('');
   const [usuario, setUsuario] = useState(null);
   const [cargandoAuth, setCargandoAuth] = useState(true);
@@ -258,18 +258,28 @@ function Admin() {
 
   // Estadísticas
   const ahora = new Date();
+  const safeGetDate = (f) => {
+    if (!f) return null;
+    try {
+      const d = f.toDate ? f.toDate() : new Date(f);
+      return isNaN(d.getTime()) ? null : d;
+    } catch (e) { return null; }
+  };
+
   const pedidosHoy = pedidos.filter(p => {
-    if (!p.fecha) return false;
-    const f = p.fecha.toDate ? p.fecha.toDate() : new Date(p.fecha);
+    const f = safeGetDate(p.fecha);
+    if (!f) return false;
     return (ahora - f) / 3600000 < 24;
   });
+
   const pedidosSemana = pedidos.filter(p => {
-    if (!p.fecha) return false;
-    const f = p.fecha.toDate ? p.fecha.toDate() : new Date(p.fecha);
+    const f = safeGetDate(p.fecha);
+    if (!f) return false;
     return (ahora - f) / 3600000 < 168;
   });
-  const ingresosHoy = pedidosHoy.filter(p => p.estado === 'entregado').reduce((s, p) => s + (p.total || 0), 0);
-  const ingresosSemana = pedidosSemana.filter(p => p.estado === 'entregado').reduce((s, p) => s + (p.total || 0), 0);
+
+  const ingresosHoy = pedidosHoy.filter(p => p.estado === 'entregado').reduce((s, p) => s + (Number(p.total) || 0), 0);
+  const ingresosSemana = pedidosSemana.filter(p => p.estado === 'entregado').reduce((s, p) => s + (Number(p.total) || 0), 0);
 
   // Delivery rankings
   const deliveryConteo = {};
@@ -281,15 +291,19 @@ function Admin() {
   const deliveryRanking = Object.entries(deliveryConteo).sort((a, b) => b[1] - a[1]);
 
   const tiempoEntregaAdmin = (pedido) => {
-    if (!pedido.fechaEnCamino) return null;
-    const inicio = pedido.fechaEnCamino.toDate ? pedido.fechaEnCamino.toDate() : new Date(pedido.fechaEnCamino);
-    const fin = pedido.fechaEntregado
-      ? (pedido.fechaEntregado.toDate ? pedido.fechaEntregado.toDate() : new Date(pedido.fechaEntregado))
-      : new Date();
-    const mins = Math.floor((fin - inicio) / 60000);
-    if (mins < 1) return '< 1 min';
-    if (mins < 60) return `${mins} min`;
-    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    if (!pedido || !pedido.fechaEnCamino) return null;
+    try {
+      const inicio = pedido.fechaEnCamino.toDate ? pedido.fechaEnCamino.toDate() : new Date(pedido.fechaEnCamino);
+      if (isNaN(inicio.getTime())) return null;
+      const fin = pedido.fechaEntregado
+        ? (pedido.fechaEntregado.toDate ? pedido.fechaEntregado.toDate() : new Date(pedido.fechaEntregado))
+        : ahora;
+      if (isNaN(fin.getTime())) return null;
+      const mins = Math.max(0, Math.floor((fin - inicio) / 60000));
+      if (mins < 1) return '< 1 min';
+      if (mins < 60) return `${mins} min`;
+      return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    } catch (e) { return null; }
   };
 
   const deliveriesDisponibles = deliveries.filter(d => d.estadoDelivery === 'en_tienda' && d.aprobado);

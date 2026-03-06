@@ -130,15 +130,26 @@ function Delivery() {
   const tienePedidoActivo = pedidos.some(p => p.estado === 'asignado' || p.estado === 'en_camino');
 
   const tiempoEntrega = (pedido) => {
-    if (!pedido.fechaEnCamino) return null;
-    const inicio = pedido.fechaEnCamino.toDate ? pedido.fechaEnCamino.toDate() : new Date(pedido.fechaEnCamino);
-    const fin = pedido.fechaEntregado
-      ? (pedido.fechaEntregado.toDate ? pedido.fechaEntregado.toDate() : new Date(pedido.fechaEntregado))
-      : new Date();
-    const mins = Math.floor((fin - inicio) / 60000);
-    if (mins < 1) return '< 1 min';
-    if (mins < 60) return `${mins} min`;
-    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    if (!pedido || !pedido.fechaEnCamino) return null;
+    try {
+      const inicio = pedido.fechaEnCamino.toDate ? pedido.fechaEnCamino.toDate() : new Date(pedido.fechaEnCamino);
+      if (isNaN(inicio.getTime())) return null;
+      
+      const fin = pedido.fechaEntregado
+        ? (pedido.fechaEntregado.toDate ? pedido.fechaEntregado.toDate() : new Date(pedido.fechaEntregado))
+        : new Date();
+      
+      if (isNaN(fin.getTime())) return null;
+      
+      const mins = Math.floor((fin - inicio) / 60000);
+      if (mins < 0) return '0 min';
+      if (mins < 1) return '< 1 min';
+      if (mins < 60) return `${mins} min`;
+      return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    } catch (e) {
+      console.error("Error calculating time:", e);
+      return null;
+    }
   };
 
   const copiarTexto = (texto) => {
@@ -215,9 +226,12 @@ function Delivery() {
   let avgMins = 0;
   if (deliveredOrders.length > 0) {
     const sumMins = deliveredOrders.reduce((sum, p) => {
-      const inicio = p.fechaEnCamino.toDate ? p.fechaEnCamino.toDate() : new Date(p.fechaEnCamino);
-      const fin = p.fechaEntregado.toDate ? p.fechaEntregado.toDate() : new Date(p.fechaEntregado);
-      return sum + Math.floor((fin - inicio) / 60000);
+      try {
+        const inicio = p.fechaEnCamino.toDate ? p.fechaEnCamino.toDate() : new Date(p.fechaEnCamino);
+        const fin = p.fechaEntregado.toDate ? p.fechaEntregado.toDate() : new Date(p.fechaEntregado);
+        if (isNaN(inicio.getTime()) || isNaN(fin.getTime())) return sum;
+        return sum + Math.max(0, Math.floor((fin - inicio) / 60000));
+      } catch (e) { return sum; }
     }, 0);
     avgMins = Math.floor(sumMins / deliveredOrders.length);
   }

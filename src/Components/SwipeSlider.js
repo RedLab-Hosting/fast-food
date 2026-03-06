@@ -11,7 +11,7 @@ function SwipeSlider({ onSwipeSuccess, text = "Desliza cuando entregues el pedid
     setIsDragging(true);
   };
 
-  const onDrag = (e) => {
+  const onDrag = useCallback((e) => {
     if (!isDragging || !containerRef.current || !thumbRef.current) return;
     
     const containerRect = containerRef.current.getBoundingClientRect();
@@ -32,9 +32,9 @@ function SwipeSlider({ onSwipeSuccess, text = "Desliza cuando entregues el pedid
       setSliderVal(maxVal);
       onSwipeSuccess();
     }
-  };
+  }, [isDragging, onSwipeSuccess]);
 
-  const endDrag = () => {
+  const endDrag = useCallback(() => {
     if (!isDragging) return;
     setIsDragging(false);
     if (!containerRef.current || !thumbRef.current) return;
@@ -46,7 +46,7 @@ function SwipeSlider({ onSwipeSuccess, text = "Desliza cuando entregues el pedid
     if (sliderVal < maxVal * 0.95) {
       setSliderVal(0); // Snap back
     }
-  };
+  }, [isDragging, sliderVal]);
 
   useEffect(() => {
     if (isDragging) {
@@ -66,7 +66,7 @@ function SwipeSlider({ onSwipeSuccess, text = "Desliza cuando entregues el pedid
       window.removeEventListener('touchmove', onDrag);
       window.removeEventListener('touchend', endDrag);
     };
-  }, [isDragging, sliderVal]);
+  }, [isDragging, onDrag, endDrag]);
 
   return (
     <div 
