@@ -4,6 +4,7 @@ import L from 'leaflet';
 import { db } from '../../services/firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { IconMapPin, IconMotorbike, IconShopping, IconCheckCircle, IconPhone, IconDollar, IconWarning } from '../../Components/Icons';
+import { useTasa } from '../../hooks/useTasa';
 
 // Icono personalizado para el Pin
 const iconoPin = new L.Icon({
@@ -80,14 +81,19 @@ function MapaUbicacion({ alCambiarUbicacion, posicionGPS }) {
 }
 
 function Checkout({ carrito, total, volver, onPedidoCreado }) {
+  const { tasa, aBs } = useTasa();
   const [metodo, setMetodo] = useState('delivery');
   const [datos, setDatos] = useState(() => {
     // Auto-rellenar desde localStorage
-    const saved = localStorage.getItem('cliente_datos');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return { nombre: parsed.nombre || '', apellido: parsed.apellido || '', telefono: parsed.telefono || '', direccion: '' };
-    }
+    try {
+      const saved = localStorage.getItem('cliente_datos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return { nombre: parsed.nombre || '', apellido: parsed.apellido || '', telefono: parsed.telefono || '', direccion: '' };
+        }
+      }
+    } catch { /* corrupt data, ignore */ }
     return { nombre: '', apellido: '', telefono: '', direccion: '' };
   });
   const [linkUbicacion, setLinkUbicacion] = useState('');
@@ -96,7 +102,10 @@ function Checkout({ carrito, total, volver, onPedidoCreado }) {
   const [pagaCon, setPagaCon] = useState('');
   const [necesitaVuelto, setNecesitaVuelto] = useState(false);
 
-  const vuelto = pagaCon ? (parseFloat(pagaCon) - total).toFixed(2) : '0.00';
+  // Currency logic: pago_movil = Bs, zelle/efectivo = USD
+  const esBs = metodoPago === 'pago_movil';
+  const totalBs = tasa > 0 ? (Number(total) || 0) * tasa : 0;
+  const vuelto = pagaCon ? (parseFloat(pagaCon) - (Number(total) || 0)).toFixed(2) : '0.00';
 
   const obtenerUbicacion = () => {
     if (navigator.geolocation) {
@@ -167,9 +176,14 @@ function Checkout({ carrito, total, volver, onPedidoCreado }) {
       const cant = p.cantidad || 1;
       const extraCost = p.extraTotal || 0;
       const itemTotal = (Number(p.precio) + extraCost) * cant;
-      let line = `• ${p.nombre} x${cant} ($${itemTotal.toFixed(2)})`;
+      const itemTotalBs = tasa > 0 ? itemTotal * tasa : null;
+      // Show price in correct currency
+      const precioStr = esBs && itemTotalBs
+        ? `Bs ${itemTotalBs.toFixed(0)} (≈ $${(Number(itemTotal) || 0).toFixed(2)})`
+        : `$${(Number(itemTotal) || 0).toFixed(2)}${tasa > 0 ? ` (≈ Bs ${(itemTotal * tasa).toFixed(0)})` : ''}`;
+      let line = `• ${p.nombre} x${cant} (${precioStr})`;
       if (p.personalizaciones && p.personalizaciones.length > 0) {
-        const opciones = p.personalizaciones.map(o => `  ↳ ${o.label}${o.extra ? ` (+$${o.extra.toFixed(2)})` : ''}`).join('\n');
+        const opciones = p.personalizaciones.map(o => `  ↳ ${o.label}${o.extra ? ` (+$${(Number(o.extra) || 0).toFixed(2)})` : ''}`).join('\n');
         line += '\n' + opciones;
       }
       if (p.nota) {
@@ -178,10 +192,18 @@ function Checkout({ carrito, total, volver, onPedidoCreado }) {
       return line;
     }).join('\n');
 
+    // Build total line based on payment method
+    let totalLine;
+    if (esBs && tasa > 0) {
+      totalLine = `*TOTAL A PAGAR: Bs ${totalBs.toFixed(0)}* (≈ $${(Number(total) || 0).toFixed(2)})`;
+    } else {
+      totalLine = `*TOTAL A PAGAR: $${(Number(total) || 0).toFixed(2)}*${tasa > 0 ? ` (≈ Bs ${totalBs.toFixed(0)})` : ''}`;
+    }
+
     // Info de pago
     let infoPago = `*Método de pago:* ${getPagoTexto()}`;
     if (metodoPago === 'efectivo' && pagaCon) {
-      infoPago += `\n*Paga con:* $${parseFloat(pagaCon).toFixed(2)}`;
+      infoPago += `\n*Paga con:* $${(parseFloat(pagaCon) || 0).toFixed(2)}`;
       infoPago += `\n*Vuelto:* $${vuelto}`;
       if (necesitaVuelto) {
         infoPago += ` ⚠️ _El repartidor debe llevar vuelto_`;
@@ -206,6 +228,7 @@ function Checkout({ carrito, total, volver, onPedidoCreado }) {
           extraTotal: p.extraTotal || 0,
         })),
         total: total,
+        totalBs: tasa > 0 ? totalBs : 0,
         metodoPago: metodoPago,
         pagaCon: metodoPago === 'efectivo' ? parseFloat(pagaCon) || 0 : 0,
         vuelto: metodoPago === 'efectivo' ? parseFloat(vuelto) || 0 : 0,
@@ -232,7 +255,7 @@ ${linkUbicacion ? `*📍 Ubicación GPS:* ${linkUbicacion}` : ''}
 *PEDIDO:*
 ${listaProductos}
 
-*TOTAL A PAGAR: $${total.toFixed(2)}*
+${totalLine}
 ${infoPago}
 -------------------------
 ${metodoPago === 'efectivo' ? '_El repartidor lleva vuelto._' : '_Por favor, adjunte la captura de su pago a este chat._'}
@@ -382,10 +405,37 @@ ${metodoPago === 'efectivo' ? '_El repartidor lleva vuelto._' : '_Por favor, adj
             </div>
           )}
 
+          {/* Total box — currency depends on payment method */}
           <div className="bg-kfc-dark text-white p-5 rounded-xl border border-gray-800 mt-8 shadow-md">
-            <p className="flex justify-between font-black text-2xl">
-              <span>Total a pagar:</span>
-              <span className="text-kfc-red">${total.toFixed(2)}</span>
+            {esBs ? (
+              <>
+                <p className="flex justify-between font-black text-2xl">
+                  <span>Total a pagar:</span>
+                  <span className="text-yellow-400">
+                    {tasa > 0 ? `Bs ${totalBs.toFixed(0)}` : 'Cargando...'}
+                  </span>
+                </p>
+                {tasa > 0 && (
+                  <p className="text-right text-sm text-gray-400 font-semibold mt-1">
+                    ≈ ${(Number(total) || 0).toFixed(2)} USD
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="flex justify-between font-black text-2xl">
+                  <span>Total a pagar:</span>
+                  <span className="text-kfc-red">${(Number(total) || 0).toFixed(2)}</span>
+                </p>
+                {tasa > 0 && (
+                  <p className="text-right text-sm text-gray-400 font-semibold mt-1">
+                    ≈ Bs {totalBs.toFixed(0)}
+                  </p>
+                )}
+              </>
+            )}
+            <p className="text-xs text-gray-500 mt-2 font-medium">
+              {esBs ? '📱 Pago en Bolívares (Pago Móvil)' : metodoPago === 'zelle' ? '💵 Pago en USD (Zelle)' : '💰 Pago en USD (Efectivo)'}
             </p>
           </div>
 

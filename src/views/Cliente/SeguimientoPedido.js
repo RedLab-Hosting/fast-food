@@ -47,14 +47,22 @@ function SeguimientoPedido({ pedidoId, volver }) {
 
   const tiempoEntrega = () => {
     if (!pedido?.fechaEnCamino) return null;
-    const inicio = pedido.fechaEnCamino.toDate ? pedido.fechaEnCamino.toDate() : new Date(pedido.fechaEnCamino);
-    const fin = pedido.fechaEntregado
-      ? (pedido.fechaEntregado.toDate ? pedido.fechaEntregado.toDate() : new Date(pedido.fechaEntregado))
-      : new Date();
-    const mins = Math.floor((fin - inicio) / 60000);
-    if (mins < 1) return '< 1 min';
-    if (mins < 60) return `${mins} min`;
-    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    try {
+      const inicio = pedido.fechaEnCamino.toDate ? pedido.fechaEnCamino.toDate() : new Date(pedido.fechaEnCamino);
+      if (isNaN(inicio.getTime())) return null;
+      const fin = pedido.fechaEntregado
+        ? (pedido.fechaEntregado.toDate ? pedido.fechaEntregado.toDate() : new Date(pedido.fechaEntregado))
+        : new Date();
+      if (isNaN(fin.getTime())) return null;
+      const mins = Math.floor((fin - inicio) / 60000);
+      if (mins < 0) return '0 min';
+      if (mins < 1) return '< 1 min';
+      if (mins < 60) return `${mins} min`;
+      return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    } catch (e) {
+      console.error('Error calculating delivery time:', e);
+      return null;
+    }
   };
 
   if (cargando) {
@@ -142,12 +150,12 @@ function SeguimientoPedido({ pedidoId, volver }) {
               {pedido.items && pedido.items.map((item, i) => (
                 <div key={i} className="flex justify-between text-sm py-1">
                   <span className="text-gray-600">{item.nombre} {item.cantidad > 1 ? `x${item.cantidad}` : ''}</span>
-                  <span className="font-mono font-bold">${(item.precio * (item.cantidad || 1)).toFixed(2)}</span>
+                  <span className="font-mono font-bold">${(Number(item.precio) * (item.cantidad || 1)).toFixed(2)}</span>
                 </div>
               ))}
               <div className="flex justify-between mt-2 pt-2 border-t border-gray-200 font-bold">
                 <span>Total</span>
-                <span className="text-kfc-red text-lg">${pedido.total?.toFixed ? pedido.total.toFixed(2) : pedido.total}</span>
+                <span className="text-kfc-red text-lg">${(Number(pedido.total) || 0).toFixed(2)}</span>
               </div>
             </div>
 

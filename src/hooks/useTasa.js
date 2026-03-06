@@ -20,8 +20,8 @@ export function useTasa() {
       if (snap.exists()) {
         const data = snap.data();
         setModo(data.modo || 'bcv');
-        setTasaManual(data.tasaManual || 0);
-        setTasa(data.tasaActual || 0);
+        setTasaManual(Number(data.tasaManual) || 0);
+        setTasa(Number(data.tasaActual) || 0);
         setUltimaActualizacion(data.ultimaActualizacion || null);
       }
     });

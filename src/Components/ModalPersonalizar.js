@@ -128,7 +128,7 @@ function ModalPersonalizar({ producto, onConfirmar, onCerrar }) {
           </button>
           <div className="absolute bottom-3 left-4 right-4">
             <h3 className="font-bold text-xl text-white drop-shadow-lg">{producto.nombre}</h3>
-            <p className="text-white/80 text-sm">${Number(producto.precio).toFixed(2)}</p>
+            <p className="text-white/80 text-sm">${(Number(producto.precio) || 0).toFixed(2)}</p>
           </div>
         </div>
 
@@ -159,7 +159,7 @@ function ModalPersonalizar({ producto, onConfirmar, onCerrar }) {
                   </div>
                   {op.extra && (
                     <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg shrink-0">
-                      +${op.extra.toFixed(2)}
+                      +${(Number(op.extra) || 0).toFixed(2)}
                     </span>
                   )}
                 </button>
@@ -189,7 +189,7 @@ function ModalPersonalizar({ producto, onConfirmar, onCerrar }) {
             <IconCheck className="w-5 h-5" />
             Agregar al pedido
             {extraTotal > 0 && (
-              <span className="text-red-200 text-sm ml-1">(+${extraTotal.toFixed(2)})</span>
+              <span className="text-red-200 text-sm ml-1">(+${(Number(extraTotal) || 0).toFixed(2)})</span>
             )}
           </button>
         </div>

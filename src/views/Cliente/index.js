@@ -40,8 +40,13 @@ function Cliente() {
   const { tasa, aBs } = useTasa();
   const [productos, setProductos] = useState([]);
   const [carrito, setCarrito] = useState(() => {
-    const guardado = localStorage.getItem('carrito-fastfood');
-    return guardado ? JSON.parse(guardado) : [];
+    try {
+      const guardado = localStorage.getItem('carrito-fastfood');
+      const parsed = guardado ? JSON.parse(guardado) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   });
   const [modalAbierto, setModalAbierto] = useState(false);
   const [enCheckout, setEnCheckout] = useState(false);
@@ -172,7 +177,7 @@ function Cliente() {
             <p className="text-gray-300 text-sm mt-1">Intenta con otra búsqueda o categoría</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {productosFiltrados.map((producto) => {
               const cant = getCantidadEnCarrito(producto.id);
               const imgSrc = producto.imagen || IMG_DEFAULT[producto.categoria] || IMG_DEFAULT.otros;
@@ -195,7 +200,7 @@ function Cliente() {
                     )}
                     <div className="absolute bottom-3 right-3 text-right">
                       <p className="text-white font-black text-2xl drop-shadow-lg">
-                        ${Number(producto.precio).toFixed(2)}
+                        ${(Number(producto.precio) || 0).toFixed(2)}
                       </p>
                       {tasa > 0 && (
                         <p className="text-white/70 text-xs font-semibold drop-shadow-md">

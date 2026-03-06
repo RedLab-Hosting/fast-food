@@ -1,7 +1,9 @@
 import React from 'react';
-import { IconClose, IconPlus, IconMinus } from './Icons';
+import { IconClose, IconPlus, IconMinus, IconNote } from './Icons';
+import { useTasa } from '../hooks/useTasa';
 
 function ModalCarrito({ abierto, cerrar, productos, actualizarCantidad, eliminar, irACheckout }) {
+  const { tasa, aBs } = useTasa();
   if (!abierto) return null;
 
   const total = productos.reduce((acc, p) => acc + (Number(p.precio) + (p.extraTotal || 0)) * (p.cantidad || 1), 0);
@@ -47,7 +49,10 @@ function ModalCarrito({ abierto, cerrar, productos, actualizarCantidad, eliminar
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-sm text-gray-800 truncate">{item.nombre}</p>
-                        <p className="text-kfc-red font-bold text-sm">${precioItem.toFixed(2)}</p>
+                        <p className="text-kfc-red font-bold text-sm">${(Number(precioItem) || 0).toFixed(2)}</p>
+                        {tasa > 0 && (
+                          <p className="text-gray-400 text-xs font-medium">Bs {aBs(Number(precioItem))}</p>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
@@ -78,7 +83,7 @@ function ModalCarrito({ abierto, cerrar, productos, actualizarCantidad, eliminar
                         {item.personalizaciones.map(p => (
                           <span key={p.id} className="text-xs bg-white text-gray-500 px-2 py-1 rounded-lg border border-gray-100 font-medium">
                             {p.label}
-                            {p.extra > 0 && <span className="text-green-600 ml-1">+${p.extra.toFixed(2)}</span>}
+                            {p.extra > 0 && <span className="text-green-600 ml-1">+${(Number(p.extra) || 0).toFixed(2)}</span>}
                           </span>
                         ))}
                       </div>
@@ -99,14 +104,19 @@ function ModalCarrito({ abierto, cerrar, productos, actualizarCantidad, eliminar
 
         {/* Footer */}
         <div className="border-t border-gray-100 px-6 py-4 bg-white">
-          <div className="flex justify-between text-lg font-extrabold mb-4">
-            <span className="text-gray-700">Total:</span>
-            <span className="text-kfc-red">${total.toFixed(2)}</span>
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-lg font-extrabold text-gray-700">Total:</span>
+            <div className="text-right">
+              <p className="text-lg font-extrabold text-kfc-red">${(Number(total) || 0).toFixed(2)}</p>
+              {tasa > 0 && (
+                <p className="text-sm text-gray-400 font-semibold">Bs {aBs(Number(total))}</p>
+              )}
+            </div>
           </div>
           <button
             disabled={productos.length === 0}
             onClick={irACheckout}
-            className="w-full bg-kfc-red text-white py-3.5 rounded-xl font-bold text-base hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 transition-all shadow-float btn-press"
+            className="w-full bg-kfc-red text-white py-3.5 rounded-xl font-bold text-base hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 transition-all shadow-float btn-press mt-3"
           >
             Continuar al Pago
           </button>

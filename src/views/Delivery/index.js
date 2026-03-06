@@ -6,7 +6,9 @@ import LoginDelivery from './LoginDelivery';
 import SwipeSlider from '../../Components/SwipeSlider';
 import { pedirPermisoNotificaciones, enviarNotificacion, getNotifPrefs, setNotifPrefs, useDetectarCambios } from '../../services/notificaciones';
 import { IconBell, IconLogout, IconMotorbike, IconClipboard, IconPackage, IconCheckCircle, IconPhone, IconMapPin, IconClock, IconStore, IconWarning, IconTruck, IconCopy, IconMessageCircle, IconNavigation, IconXCircle } from '../../Components/Icons';
+import { useTasa } from '../../hooks/useTasa';
 function Delivery() {
+  const { tasa, aBs } = useTasa();
   const [usuario, setUsuario] = useState(null);
   const [cargandoAuth, setCargandoAuth] = useState(true);
   const [perfil, setPerfil] = useState(null);
@@ -167,7 +169,8 @@ function Delivery() {
   const onCambiosPedidos = useCallback(({ nuevos }) => {
     nuevos.forEach(p => {
       if (notifConfig.pedidoAsignado) {
-        enviarNotificacion('Nuevo pedido asignado!', { body: `${p.cliente} - $${p.total?.toFixed ? p.total.toFixed(2) : p.total}` });
+        const totalSeguro = (Number(p.total) || 0).toFixed(2);
+        enviarNotificacion('Nuevo pedido asignado!', { body: `${p.cliente} - $${totalSeguro}` });
         setToastNotif(p);
         setTimeout(() => setToastNotif(null), 8000); // Hide after 8 seconds
       }
@@ -354,7 +357,19 @@ function Delivery() {
                   <div className="bg-white/10 rounded-lg p-3 mt-3">
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-sm font-bold text-gray-300">Total a cobrar:</span>
-                      <span className="text-xl font-black text-green-400">${pedido.total?.toFixed ? pedido.total.toFixed(2) : pedido.total}</span>
+                      <div className="text-right">
+                        {pedido.metodoPago === 'pago_movil' ? (
+                          <>
+                            <span className="text-xl font-black text-yellow-300">Bs {Number(pedido.totalBs) > 0 ? Number(pedido.totalBs).toFixed(0) : tasa > 0 ? ((Number(pedido.total) || 0) * tasa).toFixed(0) : '—'}</span>
+                            <p className="text-xs text-gray-400">≈ ${(Number(pedido.total) || 0).toFixed(2)}</p>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-xl font-black text-green-400">${(Number(pedido.total) || 0).toFixed(2)}</span>
+                            {tasa > 0 && <p className="text-xs text-gray-400">≈ Bs {((Number(pedido.total) || 0) * tasa).toFixed(0)}</p>}
+                          </>
+                        )}
+                      </div>
                     </div>
                     {pedido.metodoPago && (
                       <p className="text-xs text-blue-300 font-medium">Método: {pedido.metodoPago === 'efectivo' ? 'Efectivo USD' : pedido.metodoPago === 'pago_movil' ? 'Pago Móvil' : 'Zelle'}</p>
@@ -384,24 +399,27 @@ function Delivery() {
         )}
 
         {/* Filtros */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex gap-1.5 mb-6 overflow-x-auto pb-2 scrollbar-hide bg-white p-1.5 rounded-2xl shadow-card">
           {[
-            { key: 'asignado', label: 'Pedidos entrantes', Icon: IconPackage, count: pedidos.filter(p => p.estado === 'asignado').length },
-            { key: 'todos', label: 'Mi pedido activo', Icon: IconTruck, count: pedidos.filter(p => p.estado === 'en_camino').length },
+            { key: 'asignado', label: 'Entrantes', Icon: IconPackage, count: pedidos.filter(p => p.estado === 'asignado').length },
+            { key: 'todos', label: 'Activo', Icon: IconTruck, count: pedidos.filter(p => p.estado === 'en_camino').length },
             { key: 'entregado', label: 'Historial', Icon: IconCheckCircle },
             { key: 'stats', label: 'Mis Stats', Icon: IconClipboard },
           ].map(f => (
             <button
               key={f.key}
               onClick={() => setFiltro(f.key)}
-              className={`px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all btn-press flex items-center gap-1.5 ${
+              className={`flex-1 py-2 px-1 rounded-xl font-bold transition-all btn-press flex flex-col items-center justify-center gap-0.5 ${
                 filtro === f.key
                   ? 'bg-kfc-dark text-white shadow-sm'
-                  : 'bg-white text-gray-600 shadow-card hover:shadow-card-hover'
+                  : 'text-gray-500 hover:text-kfc-dark'
               }`}
             >
-              <f.Icon className="w-4 h-4" /> {f.label}
-              {f.count > 0 && <span className="text-xs opacity-70">({f.count})</span>}
+              <div className="relative">
+                <f.Icon className="w-5 h-5" />
+                {f.count > 0 && <span className="absolute -top-1.5 -right-1.5 bg-kfc-red text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black">{f.count}</span>}
+              </div>
+              <span className="text-[10px] font-bold leading-none mt-0.5 whitespace-nowrap">{f.label}</span>
             </button>
           ))}
         </div>
@@ -478,14 +496,14 @@ function Delivery() {
                       {pedido.estado === 'en_camino' && filtro === 'todos' && (
                         <div className="grid grid-cols-3 gap-2 mt-1">
                           <a
-                            href={`tel:${pedido.telefono}`}
+                            href={`tel:${pedido.telefono || ''}`}
                             className="bg-green-500 text-white rounded-xl py-2.5 flex flex-col items-center justify-center gap-1 hover:bg-green-600 active:scale-95 transition-all w-full"
                           >
                             <IconPhone className="w-5 h-5" />
                             <span className="text-[10px] font-bold uppercase tracking-wider">Llamar</span>
                           </a>
                           <a
-                            href={`https://wa.me/${pedido.telefono.replace(/\D/g, '')}`}
+                            href={`https://wa.me/${(pedido.telefono || '').replace(/\D/g, '')}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="bg-green-600 text-white rounded-xl py-2.5 flex flex-col items-center justify-center gap-1 hover:bg-green-700 active:scale-95 transition-all w-full"
@@ -510,12 +528,24 @@ function Delivery() {
                   {pedido.items && pedido.items.map((item, i) => (
                     <div key={i} className="flex justify-between text-sm py-1">
                       <span className="text-gray-700">{item.nombre} {item.cantidad > 1 ? `x${item.cantidad}` : ''}</span>
-                      <span className="font-mono font-bold text-gray-600">${(item.precio * (item.cantidad || 1)).toFixed(2)}</span>
+                      <span className="font-mono font-bold text-gray-600">${(Number(item.precio) * (item.cantidad || 1)).toFixed(2)}</span>
                     </div>
                   ))}
                   <div className="flex justify-between mt-2 pt-2 border-t border-gray-200">
                     <span className="font-bold">Total</span>
-                    <span className="font-bold text-kfc-red text-lg">${pedido.total?.toFixed ? pedido.total.toFixed(2) : pedido.total}</span>
+                    <div className="text-right">
+                      {pedido.metodoPago === 'pago_movil' ? (
+                        <>
+                          <span className="font-bold text-yellow-600">Bs {Number(pedido.totalBs) > 0 ? Number(pedido.totalBs).toFixed(0) : tasa > 0 ? ((Number(pedido.total) || 0) * tasa).toFixed(0) : '—'}</span>
+                          <p className="text-xs text-gray-400">≈ ${(Number(pedido.total) || 0).toFixed(2)}</p>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-bold text-kfc-red text-lg">${(Number(pedido.total) || 0).toFixed(2)}</span>
+                          {tasa > 0 && <p className="text-xs text-gray-400">≈ Bs {((Number(pedido.total) || 0) * tasa).toFixed(0)}</p>}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -527,8 +557,8 @@ function Delivery() {
                     </p>
                     {pedido.metodoPago === 'efectivo' && pedido.pagaCon > 0 && (
                       <div className="flex gap-4 text-xs mt-1">
-                        <span>Paga con: <b>${pedido.pagaCon?.toFixed ? pedido.pagaCon.toFixed(2) : pedido.pagaCon}</b></span>
-                        <span>Vuelto: <b className="text-green-700">${pedido.vuelto?.toFixed ? pedido.vuelto.toFixed(2) : pedido.vuelto}</b></span>
+                        <span>Paga con: <b>${(Number(pedido.pagaCon) || 0).toFixed(2)}</b></span>
+                        <span>Vuelto: <b className="text-green-700">${(Number(pedido.vuelto) || 0).toFixed(2)}</b></span>
                         {pedido.necesitaVuelto && <span className="text-red-600 font-bold flex items-center gap-1"><IconWarning className="w-3.5 h-3.5" /> Llevar vuelto</span>}
                       </div>
                     )}
@@ -635,7 +665,7 @@ function Delivery() {
             <div>
               <p className="font-bold text-lg mb-0.5 shadow-sm">¡Nuevo pedido asignado!</p>
               <p className="text-sm text-green-50 font-medium">{toastNotif.cliente}</p>
-              <p className="text-sm font-black mt-1 bg-white/20 inline-block px-2 py-0.5 rounded-md">${toastNotif.total?.toFixed ? toastNotif.total.toFixed(2) : toastNotif.total}</p>
+              <p className="text-sm font-black mt-1 bg-white/20 inline-block px-2 py-0.5 rounded-md">${(Number(toastNotif.total) || 0).toFixed(2)}</p>
             </div>
           </div>
         </div>

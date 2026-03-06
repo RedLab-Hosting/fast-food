@@ -72,7 +72,8 @@ export const enviarNotificacion = (titulo, opciones = {}) => {
 export const getNotifPrefs = (panel) => {
   try {
     const saved = localStorage.getItem(`notif_${panel}`);
-    return saved ? JSON.parse(saved) : null;
+    const parsed = saved ? JSON.parse(saved) : null;
+    return (parsed && typeof parsed === 'object') ? parsed : null;
   } catch {
     return null;
   }

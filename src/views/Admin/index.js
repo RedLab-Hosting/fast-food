@@ -165,7 +165,8 @@ function Admin() {
   const onCambiosPedidos = useCallback(({ nuevos, cambios }) => {
     nuevos.forEach(p => {
       if (notifConfig.nuevoPedido) {
-        enviarNotificacion('Nuevo Pedido!', { body: `${p.cliente} - $${p.total?.toFixed ? p.total.toFixed(2) : p.total}` });
+        const totalSeguro = (Number(p.total) || 0).toFixed(2);
+        enviarNotificacion('Nuevo Pedido!', { body: `${p.cliente} - $${totalSeguro}` });
       }
     });
     cambios.forEach(p => {
@@ -278,8 +279,24 @@ function Admin() {
     return (ahora - f) / 3600000 < 168;
   });
 
-  const ingresosHoy = pedidosHoy.filter(p => p.estado === 'entregado').reduce((s, p) => s + (Number(p.total) || 0), 0);
-  const ingresosSemana = pedidosSemana.filter(p => p.estado === 'entregado').reduce((s, p) => s + (Number(p.total) || 0), 0);
+  // Split revenue by payment method: pago_movil -> Bs, zelle/efectivo -> USD
+  const calcRevenueSplit = (list) => {
+    let usd = 0, bs = 0;
+    list.filter(p => p.estado === 'entregado').forEach(p => {
+      const t = Number(p.total) || 0;
+      if (p.metodoPago === 'pago_movil') {
+        // Store as Bs: use saved totalBs if available, otherwise convert with current tasa
+        bs += Number(p.totalBs) || (tasa > 0 ? t * tasa : 0);
+      } else {
+        usd += t;
+      }
+    });
+    return { usd, bs };
+  };
+  const revHoy = calcRevenueSplit(pedidosHoy);
+  const revSemana = calcRevenueSplit(pedidosSemana);
+  const ingresosHoy = revHoy.usd;
+  const ingresosSemana = revSemana.usd;
 
   // Delivery rankings
   const deliveryConteo = {};
@@ -323,7 +340,7 @@ function Admin() {
             {tasa > 0 && (
               <span className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-bold">
                 <IconDollar className="w-3.5 h-3.5" />
-                Bs {tasa.toFixed(2)}
+                Bs {(Number(tasa) || 0).toFixed(2)}
               </span>
             )}
             <button
@@ -373,8 +390,8 @@ function Admin() {
         {/* Tabs */}
         <div className="flex gap-1 bg-white p-1.5 rounded-2xl mb-6 shadow-card">
           {[
-            { key: 'pedidos', Icon: IconClipboard, label: 'Pedidos', count: pedidos.length },
-            { key: 'repartidores', Icon: IconMotorbike, label: 'Repartidores', badge: deliveriesPendientes.length },
+            { key: 'pedidos', Icon: IconClipboard, label: 'Pedidos', count: pedidos.filter(p => p.estado === 'pendiente').length },
+            { key: 'repartidores', Icon: IconMotorbike, label: 'Repartid.', badge: deliveriesPendientes.length },
             { key: 'productos', Icon: IconBurger, label: 'Productos' },
             { key: 'tasa', Icon: IconDollar, label: 'Tasa' },
             { key: 'estadisticas', Icon: IconChart, label: 'Stats' },
@@ -382,16 +399,18 @@ function Admin() {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all btn-press flex items-center justify-center gap-1.5 ${
+              className={`flex-1 py-2 px-1 rounded-xl font-bold transition-all btn-press flex flex-col items-center justify-center gap-0.5 ${
                 tab === t.key
                   ? 'bg-kfc-dark text-white shadow-sm'
                   : 'text-gray-500 hover:text-kfc-dark hover:bg-gray-50'
               }`}
             >
-              <t.Icon className="w-4 h-4" />
-              <span className="hidden sm:inline">{t.label}</span>
-              {t.count > 0 && <span className="text-xs opacity-70">({t.count})</span>}
-              {t.badge > 0 && <span className="bg-kfc-red text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">{t.badge}</span>}
+              <div className="relative">
+                <t.Icon className="w-5 h-5" />
+                {t.badge > 0 && <span className="absolute -top-1.5 -right-1.5 bg-kfc-red text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black">{t.badge}</span>}
+              </div>
+              <span className="text-[10px] font-bold leading-none mt-0.5">{t.label}</span>
+              {t.count > 0 && <span className="text-[9px] opacity-60">({t.count})</span>}
             </button>
           ))}
         </div>
@@ -514,10 +533,10 @@ function Admin() {
                               <div className="flex items-center gap-3 mt-1">
                                 <p className="text-sm font-bold text-gray-700">{pedido.telefono}</p>
                                 <div className="flex gap-1.5">
-                                  <a href={`tel:${pedido.telefono}`} title="Llamar" className="w-7 h-7 bg-green-100 text-green-600 rounded-full flex items-center justify-center hover:bg-green-200 transition-colors">
+                                  <a href={`tel:${pedido.telefono || ''}`} title="Llamar" className="w-7 h-7 bg-green-100 text-green-600 rounded-full flex items-center justify-center hover:bg-green-200 transition-colors">
                                     <IconPhone className="w-3.5 h-3.5" />
                                   </a>
-                                  <a href={`https://wa.me/${pedido.telefono.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="w-7 h-7 bg-green-100 text-green-600 rounded-full flex items-center justify-center hover:bg-green-200 transition-colors">
+                                  <a href={`https://wa.me/${(pedido.telefono || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" className="w-7 h-7 bg-green-100 text-green-600 rounded-full flex items-center justify-center hover:bg-green-200 transition-colors">
                                     <IconMessageCircle className="w-3.5 h-3.5" />
                                   </a>
                                   <button onClick={() => copiarTexto(pedido.telefono)} title="Copiar" className="w-7 h-7 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center hover:bg-gray-200 transition-colors border border-gray-200">
@@ -543,13 +562,25 @@ function Admin() {
                       <div className="bg-gray-50 rounded-lg p-3 mb-3">
                         {pedido.items && pedido.items.map((item, i) => (
                           <div key={i} className="flex justify-between text-sm py-1">
-                            <span>{item.nombre}</span>
-                            <span className="font-mono font-bold">${item.precio}</span>
+                            <span>{item.nombre} {item.cantidad > 1 ? `x${item.cantidad}` : ''}</span>
+                            <span className="font-mono font-bold">${(Number(item.precio) * (item.cantidad || 1)).toFixed(2)}</span>
                           </div>
                         ))}
                         <div className="flex justify-between mt-2 pt-2 border-t border-gray-200 font-bold">
                           <span>Total</span>
-                          <span className="text-kfc-red">${pedido.total?.toFixed ? pedido.total.toFixed(2) : pedido.total}</span>
+                          <div className="text-right">
+                            {pedido.metodoPago === 'pago_movil' ? (
+                              <>
+                                <span className="text-yellow-600">Bs {Number(pedido.totalBs) > 0 ? Number(pedido.totalBs).toFixed(0) : tasa > 0 ? ((Number(pedido.total) || 0) * tasa).toFixed(0) : '—'}</span>
+                                <p className="text-xs text-gray-400 font-normal">≈ ${(Number(pedido.total) || 0).toFixed(2)}</p>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-kfc-red">${(Number(pedido.total) || 0).toFixed(2)}</span>
+                                {tasa > 0 && <p className="text-xs text-gray-400 font-normal">≈ Bs {((Number(pedido.total) || 0) * tasa).toFixed(0)}</p>}
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -624,62 +655,48 @@ function Admin() {
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => { setProductoEditar(null); setMostrarForm(true); }}
-                className="bg-kfc-red text-white px-6 py-2 rounded-lg font-bold shadow-md hover:bg-red-700 transition-all"
+                className="bg-kfc-red text-white px-6 py-2 rounded-lg font-bold shadow-md hover:bg-red-700 transition-all flex items-center gap-1.5"
               >
-                <IconPlus className="w-4 h-4 inline" /> Nuevo Producto
+                <IconPlus className="w-4 h-4" /> Nuevo Producto
               </button>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
-              <table className="w-full text-left">
-                <thead className="bg-gray-100 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-4 text-sm font-bold text-gray-600 uppercase">Producto</th>
-                    <th className="px-4 py-4 text-sm font-bold text-gray-600 uppercase">Categoría</th>
-                    <th className="px-4 py-4 text-sm font-bold text-gray-600 uppercase">Precio</th>
-                    <th className="px-4 py-4 text-sm font-bold text-gray-600 uppercase">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {productos.map((prod) => (
-                    <tr key={prod.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-3">
-                          {prod.imagen && (
-                            <img src={prod.imagen} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                          )}
-                          <div>
-                            <p className="font-bold text-gray-800">{prod.nombre}</p>
-                            <p className="text-xs text-gray-500 line-clamp-1">{prod.descripcion}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-600">
-                        {prod.categoria || 'Sin categoría'}
-                      </td>
-                      <td className="px-4 py-4 font-mono font-bold text-green-600">
-                        ${Number(prod.precio).toFixed(2)}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => { setProductoEditar(prod); setMostrarForm(true); }}
-                            className="text-kfc-dark hover:underline text-sm font-semibold"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => eliminarProducto(prod.id)}
-                            className="text-red-500 hover:underline text-sm font-semibold"
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Mobile-friendly card list (replaces overflow table) */}
+            <div className="space-y-3">
+              {productos.map((prod) => (
+                <div key={prod.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-4">
+                  {prod.imagen && (
+                    <img src={prod.imagen} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-gray-800 truncate">{prod.nombre}</p>
+                    <p className="text-xs text-gray-400 truncate mb-1">{prod.categoria || 'Sin categoría'}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-green-600 text-sm">${Number(prod.precio).toFixed(2)}</span>
+                      {tasa > 0 && <span className="text-xs text-gray-400">/ Bs {((Number(prod.precio) || 0) * tasa).toFixed(0)}</span>}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 shrink-0">
+                    <button
+                      onClick={() => { setProductoEditar(prod); setMostrarForm(true); }}
+                      className="text-kfc-dark bg-gray-100 hover:bg-gray-200 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => eliminarProducto(prod.id)}
+                      className="text-red-500 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {productos.length === 0 && (
+                <div className="bg-white rounded-xl p-8 text-center border border-gray-100">
+                  <p className="text-gray-400">No hay productos aún</p>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -854,23 +871,45 @@ function Admin() {
         {/* TAB ESTADÍSTICAS */}
         {tab === 'estadisticas' && (
           <div className="space-y-6">
-            {/* Resumen */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
-                <p className="text-3xl font-black text-kfc-red">{pedidosHoy.length}</p>
-                <p className="text-xs text-gray-500 font-medium mt-1">Pedidos hoy</p>
+            {/* Resumen: split into USD and Bs */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center col-span-2">
+                <p className="text-xs text-gray-400 font-bold uppercase mb-2">Hoy</p>
+                <div className="flex justify-around">
+                  <div>
+                    <p className="text-2xl font-black text-kfc-red">{pedidosHoy.length}</p>
+                    <p className="text-xs text-gray-500 font-medium">Pedidos</p>
+                  </div>
+                  <div className="w-px bg-gray-100" />
+                  <div>
+                    <p className="text-2xl font-black text-green-600">${revHoy.usd.toFixed(2)}</p>
+                    <p className="text-xs text-gray-500 font-medium">USD (Zelle/Efectivo)</p>
+                  </div>
+                  <div className="w-px bg-gray-100" />
+                  <div>
+                    <p className="text-2xl font-black text-yellow-600">Bs {revHoy.bs.toFixed(0)}</p>
+                    <p className="text-xs text-gray-500 font-medium">Bs (Pago Móvil)</p>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
-                <p className="text-3xl font-black text-green-600">${ingresosHoy.toFixed(2)}</p>
-                <p className="text-xs text-gray-500 font-medium mt-1">Ingresos hoy</p>
-              </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
-                <p className="text-3xl font-black text-blue-600">{pedidosSemana.length}</p>
-                <p className="text-xs text-gray-500 font-medium mt-1">Pedidos semana</p>
-              </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
-                <p className="text-3xl font-black text-purple-600">${ingresosSemana.toFixed(2)}</p>
-                <p className="text-xs text-gray-500 font-medium mt-1">Ingresos semana</p>
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center col-span-2">
+                <p className="text-xs text-gray-400 font-bold uppercase mb-2">Última Semana</p>
+                <div className="flex justify-around">
+                  <div>
+                    <p className="text-2xl font-black text-blue-600">{pedidosSemana.length}</p>
+                    <p className="text-xs text-gray-500 font-medium">Pedidos</p>
+                  </div>
+                  <div className="w-px bg-gray-100" />
+                  <div>
+                    <p className="text-2xl font-black text-purple-600">${revSemana.usd.toFixed(2)}</p>
+                    <p className="text-xs text-gray-500 font-medium">USD (Zelle/Efectivo)</p>
+                  </div>
+                  <div className="w-px bg-gray-100" />
+                  <div>
+                    <p className="text-2xl font-black text-orange-500">Bs {revSemana.bs.toFixed(0)}</p>
+                    <p className="text-xs text-gray-500 font-medium">Bs (Pago Móvil)</p>
+                  </div>
+                </div>
               </div>
             </div>
 
