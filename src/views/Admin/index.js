@@ -9,7 +9,7 @@ import { useTasa } from '../../hooks/useTasa';
 import { IconBell, IconLogout, IconClipboard, IconMotorbike, IconBurger, IconChart, IconDollar, IconPhone, IconMapPin, IconClock, IconStar, IconStarEmpty, IconCheckCircle, IconXCircle, IconRefresh, IconPlus, IconWarning, IconTruck, IconCopy, IconMessageCircle } from '../../Components/Icons';
 
 function Admin() {
-  const { tasa, modo: modoTasa, ultimaActualizacion, cargando: cargandoTasa, error: errorTasa, actualizarBCV, guardarTasaManual, cambiarModo } = useTasa();
+  const { tasa, modo: modoTasa, ultimaActualizacion, cargando: cargandoTasa, error: errorTasa, actualizarBCV, guardarTasaManual, cambiarModo, formatearBs, formatearUSD } = useTasa();
   const [tasaManualInput, setTasaManualInput] = useState('');
   const [usuario, setUsuario] = useState(null);
   const [cargandoAuth, setCargandoAuth] = useState(true);
@@ -570,15 +570,13 @@ function Admin() {
                           <span>Total</span>
                           <div className="text-right">
                             {pedido.metodoPago === 'pago_movil' ? (
-                              <>
-                                <span className="text-yellow-600">Bs {Number(pedido.totalBs) > 0 ? Number(pedido.totalBs).toFixed(0) : tasa > 0 ? ((Number(pedido.total) || 0) * tasa).toFixed(0) : '—'}</span>
-                                <p className="text-xs text-gray-400 font-normal">≈ ${(Number(pedido.total) || 0).toFixed(2)}</p>
-                              </>
+                              <span className="text-yellow-600">
+                                Bs {formatearBs(pedido.totalBs || (tasa > 0 ? (Number(pedido.total) || 0) * tasa : 0))}
+                              </span>
                             ) : (
-                              <>
-                                <span className="text-kfc-red">${(Number(pedido.total) || 0).toFixed(2)}</span>
-                                {tasa > 0 && <p className="text-xs text-gray-400 font-normal">≈ Bs {((Number(pedido.total) || 0) * tasa).toFixed(0)}</p>}
-                              </>
+                              <span className="text-kfc-red">
+                                ${formatearUSD(pedido.total)}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -672,8 +670,8 @@ function Admin() {
                     <p className="font-bold text-gray-800 truncate">{prod.nombre}</p>
                     <p className="text-xs text-gray-400 truncate mb-1">{prod.categoria || 'Sin categoría'}</p>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-green-600 text-sm">${Number(prod.precio).toFixed(2)}</span>
-                      {tasa > 0 && <span className="text-xs text-gray-400">/ Bs {((Number(prod.precio) || 0) * tasa).toFixed(0)}</span>}
+                      <span className="font-mono font-bold text-green-600 text-sm">${formatearUSD(prod.precio)}</span>
+                      {tasa > 0 && <span className="text-xs text-gray-400">/ Bs {formatearBs((Number(prod.precio) || 0) * tasa)}</span>}
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
@@ -882,12 +880,12 @@ function Admin() {
                   </div>
                   <div className="w-px bg-gray-100" />
                   <div>
-                    <p className="text-2xl font-black text-green-600">${revHoy.usd.toFixed(2)}</p>
+                    <p className="text-2xl font-black text-green-600">${formatearUSD(revHoy.usd)}</p>
                     <p className="text-xs text-gray-500 font-medium">USD (Zelle/Efectivo)</p>
                   </div>
                   <div className="w-px bg-gray-100" />
                   <div>
-                    <p className="text-2xl font-black text-yellow-600">Bs {revHoy.bs.toFixed(0)}</p>
+                    <p className="text-2xl font-black text-yellow-600">Bs {formatearBs(revHoy.bs)}</p>
                     <p className="text-xs text-gray-500 font-medium">Bs (Pago Móvil)</p>
                   </div>
                 </div>
@@ -901,12 +899,12 @@ function Admin() {
                   </div>
                   <div className="w-px bg-gray-100" />
                   <div>
-                    <p className="text-2xl font-black text-purple-600">${revSemana.usd.toFixed(2)}</p>
+                    <p className="text-2xl font-black text-purple-600">${formatearUSD(revSemana.usd)}</p>
                     <p className="text-xs text-gray-500 font-medium">USD (Zelle/Efectivo)</p>
                   </div>
                   <div className="w-px bg-gray-100" />
                   <div>
-                    <p className="text-2xl font-black text-orange-500">Bs {revSemana.bs.toFixed(0)}</p>
+                    <p className="text-2xl font-black text-orange-500">Bs {formatearBs(revSemana.bs)}</p>
                     <p className="text-xs text-gray-500 font-medium">Bs (Pago Móvil)</p>
                   </div>
                 </div>

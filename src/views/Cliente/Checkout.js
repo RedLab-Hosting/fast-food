@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-lea
 import L from 'leaflet';
 import { db } from '../../services/firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { IconMapPin, IconMotorbike, IconShopping, IconCheckCircle, IconPhone, IconDollar, IconWarning } from '../../Components/Icons';
+import { IconMapPin, IconMotorbike, IconShopping, IconCheckCircle, IconPhone, IconDollar, IconWarning, IconCreditCard } from '../../Components/Icons';
 import { useTasa } from '../../hooks/useTasa';
 
 // Icono personalizado para el Pin
@@ -81,7 +81,7 @@ function MapaUbicacion({ alCambiarUbicacion, posicionGPS }) {
 }
 
 function Checkout({ carrito, total, volver, onPedidoCreado }) {
-  const { tasa, aBs } = useTasa();
+  const { tasa, aBs, formatearBs, formatearUSD } = useTasa();
   const [metodo, setMetodo] = useState('delivery');
   const [datos, setDatos] = useState(() => {
     // Auto-rellenar desde localStorage
@@ -105,7 +105,15 @@ function Checkout({ carrito, total, volver, onPedidoCreado }) {
   // Currency logic: pago_movil = Bs, zelle/efectivo = USD
   const esBs = metodoPago === 'pago_movil';
   const totalBs = tasa > 0 ? (Number(total) || 0) * tasa : 0;
-  const vuelto = pagaCon ? (parseFloat(pagaCon) - (Number(total) || 0)).toFixed(2) : '0.00';
+  
+  // Calculate change if cash
+  let vuelto = 0;
+  if (metodoPago === 'efectivo' && pagaCon) {
+    const pago = parseFloat(pagaCon);
+    if (!isNaN(pago) && pago > total) {
+      vuelto = pago - (Number(total) || 0);
+    }
+  }
 
   const obtenerUbicacion = () => {
     if (navigator.geolocation) {
@@ -179,11 +187,11 @@ function Checkout({ carrito, total, volver, onPedidoCreado }) {
       const itemTotalBs = tasa > 0 ? itemTotal * tasa : null;
       // Show price in correct currency
       const precioStr = esBs && itemTotalBs
-        ? `Bs ${itemTotalBs.toFixed(0)} (≈ $${(Number(itemTotal) || 0).toFixed(2)})`
-        : `$${(Number(itemTotal) || 0).toFixed(2)}${tasa > 0 ? ` (≈ Bs ${(itemTotal * tasa).toFixed(0)})` : ''}`;
+        ? `Bs ${formatearBs(itemTotalBs)} (≈ $${formatearUSD(itemTotal)})`
+        : `$${formatearUSD(itemTotal)}${tasa > 0 ? ` (≈ Bs ${formatearBs(itemTotal * tasa)})` : ''}`;
       let line = `• ${p.nombre} x${cant} (${precioStr})`;
       if (p.personalizaciones && p.personalizaciones.length > 0) {
-        const opciones = p.personalizaciones.map(o => `  ↳ ${o.label}${o.extra ? ` (+$${(Number(o.extra) || 0).toFixed(2)})` : ''}`).join('\n');
+        const opciones = p.personalizaciones.map(o => `  ↳ ${o.label}${o.extra ? ` (+$${formatearUSD(o.extra)})` : ''}`).join('\n');
         line += '\n' + opciones;
       }
       if (p.nota) {
@@ -195,16 +203,16 @@ function Checkout({ carrito, total, volver, onPedidoCreado }) {
     // Build total line based on payment method
     let totalLine;
     if (esBs && tasa > 0) {
-      totalLine = `*TOTAL A PAGAR: Bs ${totalBs.toFixed(0)}* (≈ $${(Number(total) || 0).toFixed(2)})`;
+      totalLine = `*TOTAL A PAGAR: Bs ${formatearBs(totalBs)}* (≈ $${formatearUSD(total)})`;
     } else {
-      totalLine = `*TOTAL A PAGAR: $${(Number(total) || 0).toFixed(2)}*${tasa > 0 ? ` (≈ Bs ${totalBs.toFixed(0)})` : ''}`;
+      totalLine = `*TOTAL A PAGAR: $${formatearUSD(total)}*${tasa > 0 ? ` (≈ Bs ${formatearBs(totalBs)})` : ''}`;
     }
 
     // Info de pago
     let infoPago = `*Método de pago:* ${getPagoTexto()}`;
     if (metodoPago === 'efectivo' && pagaCon) {
-      infoPago += `\n*Paga con:* $${(parseFloat(pagaCon) || 0).toFixed(2)}`;
-      infoPago += `\n*Vuelto:* $${vuelto}`;
+      infoPago += `\n*Paga con:* $${formatearUSD(pagaCon)}`;
+      infoPago += `\n*Vuelto:* $${formatearUSD(vuelto)}`;
       if (necesitaVuelto) {
         infoPago += ` ⚠️ _El repartidor debe llevar vuelto_`;
       }
@@ -261,7 +269,7 @@ ${infoPago}
 ${metodoPago === 'efectivo' ? '_El repartidor lleva vuelto._' : '_Por favor, adjunte la captura de su pago a este chat._'}
     `.trim();
 
-    const url = `https://wa.me/584246603660?text=${encodeURIComponent(mensaje)}`;
+    const url = `https://wa.me/584140000000?text=${encodeURIComponent(mensaje)}`;
     window.open(url, '_blank');
 
     // Navegar al seguimiento

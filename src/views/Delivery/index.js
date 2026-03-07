@@ -8,7 +8,7 @@ import { pedirPermisoNotificaciones, enviarNotificacion, getNotifPrefs, setNotif
 import { IconBell, IconLogout, IconMotorbike, IconClipboard, IconPackage, IconCheckCircle, IconPhone, IconMapPin, IconClock, IconStore, IconWarning, IconTruck, IconCopy, IconMessageCircle, IconNavigation, IconXCircle } from '../../Components/Icons';
 import { useTasa } from '../../hooks/useTasa';
 function Delivery() {
-  const { tasa, aBs } = useTasa();
+  const { tasa, aBs, formatearBs, formatearUSD } = useTasa();
   const [usuario, setUsuario] = useState(null);
   const [cargandoAuth, setCargandoAuth] = useState(true);
   const [perfil, setPerfil] = useState(null);
@@ -359,15 +359,13 @@ function Delivery() {
                       <span className="text-sm font-bold text-gray-300">Total a cobrar:</span>
                       <div className="text-right">
                         {pedido.metodoPago === 'pago_movil' ? (
-                          <>
-                            <span className="text-xl font-black text-yellow-300">Bs {Number(pedido.totalBs) > 0 ? Number(pedido.totalBs).toFixed(0) : tasa > 0 ? ((Number(pedido.total) || 0) * tasa).toFixed(0) : '—'}</span>
-                            <p className="text-xs text-gray-400">≈ ${(Number(pedido.total) || 0).toFixed(2)}</p>
-                          </>
+                          <span className="text-xl font-black text-yellow-300">
+                            Bs {formatearBs(pedido.totalBs || (tasa > 0 ? (Number(pedido.total) || 0) * tasa : 0))}
+                          </span>
                         ) : (
-                          <>
-                            <span className="text-xl font-black text-green-400">${(Number(pedido.total) || 0).toFixed(2)}</span>
-                            {tasa > 0 && <p className="text-xs text-gray-400">≈ Bs {((Number(pedido.total) || 0) * tasa).toFixed(0)}</p>}
-                          </>
+                          <span className="text-xl font-black text-green-400">
+                            ${formatearUSD(pedido.total)}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -535,15 +533,13 @@ function Delivery() {
                     <span className="font-bold">Total</span>
                     <div className="text-right">
                       {pedido.metodoPago === 'pago_movil' ? (
-                        <>
-                          <span className="font-bold text-yellow-600">Bs {Number(pedido.totalBs) > 0 ? Number(pedido.totalBs).toFixed(0) : tasa > 0 ? ((Number(pedido.total) || 0) * tasa).toFixed(0) : '—'}</span>
-                          <p className="text-xs text-gray-400">≈ ${(Number(pedido.total) || 0).toFixed(2)}</p>
-                        </>
+                        <span className="font-bold text-yellow-600">
+                          Bs {formatearBs(pedido.totalBs || (tasa > 0 ? (Number(pedido.total) || 0) * tasa : 0))}
+                        </span>
                       ) : (
-                        <>
-                          <span className="font-bold text-kfc-red text-lg">${(Number(pedido.total) || 0).toFixed(2)}</span>
-                          {tasa > 0 && <p className="text-xs text-gray-400">≈ Bs {((Number(pedido.total) || 0) * tasa).toFixed(0)}</p>}
-                        </>
+                        <span className="font-bold text-kfc-red text-lg">
+                          ${formatearUSD(pedido.total)}
+                        </span>
                       )}
                     </div>
                   </div>

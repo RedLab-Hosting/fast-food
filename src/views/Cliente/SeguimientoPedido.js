@@ -2,13 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../../services/firebase';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { IconClipboard, IconPackage, IconMotorbike, IconCheckCircle, IconXCircle, IconWarning, IconClock, IconStar, IconStarEmpty } from '../../Components/Icons';
+import { useTasa } from '../../hooks/useTasa';
 
 function SeguimientoPedido({ pedidoId, volver }) {
+  const { formatearBs, formatearUSD } = useTasa();
   const [pedido, setPedido] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [calificacion, setCalificacion] = useState(0);
   const [hoverStar, setHoverStar] = useState(0);
   const [yaCalificado, setYaCalificado] = useState(false);
+  
+  const esBs = pedido && pedido.metodoPago === 'pago_movil';
 
   useEffect(() => {
     if (!pedidoId) return;
@@ -147,15 +151,22 @@ function SeguimientoPedido({ pedidoId, volver }) {
 
             <div className="bg-gray-50 rounded-xl p-4">
               <p className="font-bold text-sm text-gray-700 mb-2">Tu pedido:</p>
-              {pedido.items && pedido.items.map((item, i) => (
-                <div key={i} className="flex justify-between text-sm py-1">
-                  <span className="text-gray-600">{item.nombre} {item.cantidad > 1 ? `x${item.cantidad}` : ''}</span>
-                  <span className="font-mono font-bold">${(Number(item.precio) * (item.cantidad || 1)).toFixed(2)}</span>
-                </div>
-              ))}
+              {pedido.items && pedido.items.map((item, i) => {
+                const itemTotal = (Number(item.precio) || 0) * (item.cantidad || 1);
+                return (
+                  <div key={i} className="flex justify-between text-sm py-1">
+                    <span className="text-gray-600">{item.nombre} {item.cantidad > 1 ? `x${item.cantidad}` : ''}</span>
+                    <span className="font-mono font-bold">
+                      {esBs ? `Bs ${formatearBs(itemTotal * (pedido.tasaCambio || 1))}` : `$${formatearUSD(itemTotal)}`}
+                    </span>
+                  </div>
+                );
+              })}
               <div className="flex justify-between mt-2 pt-2 border-t border-gray-200 font-bold">
-                <span>Total</span>
-                <span className="text-kfc-red text-lg">${(Number(pedido.total) || 0).toFixed(2)}</span>
+                <span>Total pagado ({esBs ? 'Pago Móvil' : 'Dólares'})</span>
+                <span className="text-kfc-red text-lg">
+                  {esBs ? `Bs ${formatearBs(pedido.totalBs)}` : `$${formatearUSD(pedido.total)}`}
+                </span>
               </div>
             </div>
 

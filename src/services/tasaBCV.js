@@ -46,9 +46,27 @@ export async function fetchTasaBCV() {
   throw lastError || new Error('Failed to fetch BCV rate');
 }
 
+export function formatearBs(monto) {
+  if (monto === null || monto === undefined || isNaN(monto)) return '0,00';
+  // Formato: 1.234,56 (dot thousands, comma decimals)
+  return Number(monto).toLocaleString('es-VE', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  });
+}
+
+export function formatearUSD(monto) {
+  if (monto === null || monto === undefined || isNaN(monto)) return '0.00';
+  // Formato: 1,234.56 (comma thousands, dot decimals)
+  return Number(monto).toLocaleString('en-US', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  });
+}
+
+// Retro-compatibilidad manual hasta migrar todo
 export function formatBs(usd, tasa) {
   if (!tasa || tasa <= 0) return null;
   const bs = usd * tasa;
-  // Format with Venezuelan locale (dot for thousands, comma for decimal)
   return bs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }

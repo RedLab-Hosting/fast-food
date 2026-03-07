@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { db } from '../services/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { fetchTasaBCV, formatBs } from '../services/tasaBCV';
+import { fetchTasaBCV, formatBs, formatearBs, formatearUSD } from '../services/tasaBCV';
 
 // Firestore document: config/tasa
 const TASA_DOC = doc(db, 'config', 'tasa');
@@ -72,7 +72,7 @@ export function useTasa() {
     setModo(nuevoModo);
   }, [actualizarBCV]);
 
-  // Format helper
+  // Format helper (old version)
   const aBs = useCallback((usd) => formatBs(usd, tasa), [tasa]);
 
   return {
@@ -86,5 +86,7 @@ export function useTasa() {
     guardarTasaManual,
     cambiarModo,
     aBs,
+    formatearBs,
+    formatearUSD
   };
 }

@@ -53,18 +53,32 @@ export const pedirPermisoNotificaciones = async () => {
   return permiso === 'granted';
 };
 
-// Enviar notificación del navegador
-export const enviarNotificacion = (titulo, opciones = {}) => {
+// Enviar notificación del navegador (compatible con móviles)
+export const enviarNotificacion = async (titulo, opciones = {}) => {
   crearSonido();
-  if ('Notification' in window && Notification.permission === 'granted') {
-    const notif = new Notification(titulo, {
-      icon: '/logo192.png',
-      badge: '/logo192.png',
-      ...opciones,
-    });
-    // Cerrar automáticamente después de 5 segundos
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  const notifOpts = {
+    icon: '/logo192.png',
+    badge: '/logo192.png',
+    ...opciones,
+  };
+
+  // Intentar con new Notification (funciona en desktop)
+  try {
+    const notif = new Notification(titulo, notifOpts);
     setTimeout(() => notif.close(), 5000);
     return notif;
+  } catch (e) {
+    // Móviles requieren ServiceWorker — intentar fallback
+    try {
+      const reg = await navigator.serviceWorker?.ready;
+      if (reg) {
+        reg.showNotification(titulo, notifOpts);
+      }
+    } catch (e2) {
+      // Notificaciones no soportadas en este dispositivo, ignorar silenciosamente
+    }
   }
 };
 
