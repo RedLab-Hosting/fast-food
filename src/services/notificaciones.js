@@ -67,17 +67,21 @@ export const enviarNotificacion = async (titulo, opciones = {}) => {
   // Intentar con new Notification (funciona en desktop)
   try {
     const notif = new Notification(titulo, notifOpts);
-    setTimeout(() => notif.close(), 5000);
+    setTimeout(() => {
+      try { notif.close(); } catch (e) {}
+    }, 5000);
     return notif;
   } catch (e) {
     // Móviles requieren ServiceWorker — intentar fallback
     try {
-      const reg = await navigator.serviceWorker?.ready;
-      if (reg) {
-        reg.showNotification(titulo, notifOpts);
+      if (navigator.serviceWorker) {
+        const reg = await navigator.serviceWorker.ready;
+        if (reg) {
+          reg.showNotification(titulo, notifOpts);
+        }
       }
     } catch (e2) {
-      // Notificaciones no soportadas en este dispositivo, ignorar silenciosamente
+      // Notificaciones no soportadas en este dispositivo o error en service worker, ignorar silenciosamente
     }
   }
 };
@@ -101,6 +105,16 @@ export const setNotifPrefs = (panel, prefs) => {
 // Hook para detectar cambios en una lista y notificar
 export const useDetectarCambios = (items, keyField, callback) => {
   const prevRef = useRef(null);
+  const isInitialLoad = useRef(true);
+
+  // Buffer de carga inicial para evitar falso-spam
+  useEffect(() => {
+    isInitialLoad.current = true;
+    const timer = setTimeout(() => {
+      isInitialLoad.current = false;
+    }, 2500); // 2.5 segundos de gracia
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (prevRef.current === null) {
@@ -121,7 +135,7 @@ export const useDetectarCambios = (items, keyField, callback) => {
       return prev && prev.estado !== i.estado;
     });
 
-    if (nuevos.length > 0 || cambios.length > 0) {
+    if (!isInitialLoad.current && (nuevos.length > 0 || cambios.length > 0)) {
       callback({ nuevos, cambios });
     }
 

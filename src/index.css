@@ -4,12 +4,19 @@
 
 @layer base {
   body {
-    background-color: #F0F2F5;
+    background-color: #f0f2f5;
     margin: 0;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family:
+      "Inter",
+      system-ui,
+      -apple-system,
+      sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    color: #1A1A2E;
+    color: #1a1a2e;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    user-select: none;
   }
 
   /* Smooth scrolling */
@@ -37,19 +44,19 @@
 
   /* Gradient backgrounds for panels */
   .bg-gradient-brand {
-    background: linear-gradient(135deg, #E4002B 0%, #FF4757 50%, #E4002B 100%);
+    background: linear-gradient(135deg, #e4002b 0%, #ff4757 50%, #e4002b 100%);
   }
 
   .bg-gradient-dark {
-    background: linear-gradient(135deg, #1A1A2E 0%, #16213E 50%, #0F3460 100%);
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   }
 
   .bg-gradient-admin {
-    background: linear-gradient(135deg, #1A1A2E 0%, #2D2D44 100%);
+    background: linear-gradient(135deg, #1a1a2e 0%, #2d2d44 100%);
   }
 
   .bg-gradient-delivery {
-    background: linear-gradient(135deg, #0F3460 0%, #1A1A2E 100%);
+    background: linear-gradient(135deg, #0f3460 0%, #1a1a2e 100%);
   }
 
   /* Product card animation */
@@ -58,7 +65,9 @@
   }
   .product-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.06);
+    box-shadow:
+      0 12px 24px rgba(0, 0, 0, 0.1),
+      0 4px 8px rgba(0, 0, 0, 0.06);
   }
 
   /* Button press effect */
@@ -74,19 +83,19 @@
     position: relative;
   }
   .status-pulse::before {
-    content: '';
+    content: "";
     position: absolute;
     top: -2px;
     right: -2px;
     width: 8px;
     height: 8px;
-    background: #22C55E;
+    background: #22c55e;
     border-radius: 50%;
     animation: pulseSoft 2s ease-in-out infinite;
   }
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family:
+    source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
 }

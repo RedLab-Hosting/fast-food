@@ -1,13 +1,31 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { IconCheckCircle } from './Icons';
 
-function SwipeSlider({ onSwipeSuccess, text = "Desliza cuando entregues el pedido" }) {
+function SwipeSlider({ onSwipeSuccess, text = "Desliza cuando entregues el pedido", disabledUntil }) {
   const [sliderVal, setSliderVal] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0);
   const containerRef = useRef(null);
   const thumbRef = useRef(null);
 
+  useEffect(() => {
+    if (!disabledUntil) {
+      setTimeLeft(0);
+      return;
+    }
+    const updateTime = () => {
+      const remaining = disabledUntil.getTime() - Date.now();
+      setTimeLeft(Math.max(0, remaining));
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [disabledUntil]);
+
+  const isDisabled = timeLeft > 0;
+
   const startDrag = (e) => {
+    if (isDisabled) return;
     setIsDragging(true);
   };
 
@@ -75,7 +93,11 @@ function SwipeSlider({ onSwipeSuccess, text = "Desliza cuando entregues el pedid
     >
       {/* Background track text */}
       <div className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300 ${sliderVal > 20 ? 'opacity-30' : 'opacity-100'}`}>
-        <span className="text-white font-black text-sm uppercase tracking-widest pl-10">{text}</span>
+        <span className="text-white font-black text-sm uppercase tracking-widest pl-10">
+          {isDisabled 
+            ? `${Math.floor(timeLeft / 60000).toString().padStart(2, '0')}:${Math.floor((timeLeft % 60000) / 1000).toString().padStart(2, '0')} para habilitar` 
+            : text}
+        </span>
       </div>
 
       {/* The Draggable Thumb */}
@@ -85,9 +107,9 @@ function SwipeSlider({ onSwipeSuccess, text = "Desliza cuando entregues el pedid
         onTouchStart={startDrag}
         // onClick removed to force swipe only
         style={{ transform: `translateX(${sliderVal}px)` }}
-        className={`absolute left-1 w-12 h-12 bg-green-500 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-green-400 transition-colors shadow-lg z-10 ${!isDragging && sliderVal === 0 ? 'transition-transform duration-300 ease-out' : ''}`}
+        className={`absolute left-1 w-12 h-12 ${isDisabled ? 'bg-gray-600' : 'bg-green-500 hover:bg-green-400 cursor-grab active:cursor-grabbing shadow-lg'} rounded-full flex items-center justify-center transition-colors z-10 ${!isDragging && sliderVal === 0 ? 'transition-transform duration-300 ease-out' : ''}`}
       >
-        <IconCheckCircle className="w-6 h-6 text-white" />
+        <IconCheckCircle className={`w-6 h-6 ${isDisabled ? 'text-gray-400' : 'text-white'}`} />
       </div>
 
       {/* Fill bar behind thumb */}

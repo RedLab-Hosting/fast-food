@@ -3,19 +3,6 @@ import { db } from '../services/firebase';
 import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { IconClose, IconCheck, IconPlus, IconWarning, IconEdit } from './Icons';
 
-const CATEGORIAS = [
-  { value: 'hamburguesas', label: 'Hamburguesas' },
-  { value: 'pizzas', label: 'Pizzas' },
-  { value: 'pollo', label: 'Pollo' },
-  { value: 'perros', label: 'Hot Dogs' },
-  { value: 'tacos', label: 'Tacos' },
-  { value: 'ensaladas', label: 'Ensaladas' },
-  { value: 'bebidas', label: 'Bebidas' },
-  { value: 'postres', label: 'Postres' },
-  { value: 'combos', label: 'Combos' },
-  { value: 'otros', label: 'Otros' },
-];
-
 const IMG_SUGERIDAS = {
   hamburguesas: [
     { url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=300&fit=crop', label: 'Burger clásica' },
@@ -60,7 +47,7 @@ const IMG_SUGERIDAS = {
   ],
 };
 
-function FormularioProducto({ cerrar, productoEditar }) {
+function FormularioProducto({ cerrar, productoEditar, categorias = [] }) {
   const editando = !!productoEditar;
   const [form, setForm] = useState({
     nombre: productoEditar?.nombre || '',
@@ -98,7 +85,7 @@ function FormularioProducto({ cerrar, productoEditar }) {
         precio: Number(form.precio),
         descripcion: form.descripcion.trim(),
         categoria: form.categoria,
-        imagen: form.imagen.trim(),
+        imagen: form.imagen.trim() || `https://source.unsplash.com/400x300/?${encodeURIComponent(form.categoria)}`,
         disponible: form.disponible,
       };
 
@@ -175,7 +162,7 @@ function FormularioProducto({ cerrar, productoEditar }) {
                 onChange={(e) => setForm({ ...form, categoria: e.target.value })}
                 className="w-full border border-gray-200 p-3.5 rounded-xl focus:ring-2 focus:ring-kfc-red/30 focus:border-kfc-red outline-none bg-gray-50 font-medium transition-all"
               >
-                {CATEGORIAS.map(c => (
+                {categorias.map(c => (
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
               </select>
@@ -220,7 +207,7 @@ function FormularioProducto({ cerrar, productoEditar }) {
             {imgsSugeridas.length > 0 && (
               <div className="mt-3">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Imágenes sugeridas para {CATEGORIAS.find(c => c.value === form.categoria)?.label || form.categoria}
+                  Imágenes sugeridas para {categorias.find(c => c.value === form.categoria)?.label || form.categoria}
                 </p>
                 <div className="grid grid-cols-4 gap-2">
                   {imgsSugeridas.map((img, i) => (

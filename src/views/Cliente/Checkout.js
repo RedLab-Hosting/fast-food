@@ -101,6 +101,7 @@ function Checkout({ carrito, total, volver, onPedidoCreado }) {
   const [metodoPago, setMetodoPago] = useState('pago_movil');
   const [pagaCon, setPagaCon] = useState('');
   const [necesitaVuelto, setNecesitaVuelto] = useState(false);
+  const [mostrarAlertaWP, setMostrarAlertaWP] = useState(false);
 
   // Currency logic: pago_movil = Bs, zelle/efectivo = USD
   const esBs = metodoPago === 'pago_movil';
@@ -414,47 +415,95 @@ ${metodoPago === 'efectivo' ? '_El repartidor lleva vuelto._' : '_Por favor, adj
           )}
 
           {/* Total box — currency depends on payment method */}
-          <div className="bg-kfc-dark text-white p-5 rounded-xl border border-gray-800 mt-8 shadow-md">
-            {esBs ? (
-              <>
-                <p className="flex justify-between font-black text-2xl">
-                  <span>Total a pagar:</span>
-                  <span className="text-yellow-400">
-                    {tasa > 0 ? `Bs ${totalBs.toFixed(0)}` : 'Cargando...'}
-                  </span>
-                </p>
-                {tasa > 0 && (
-                  <p className="text-right text-sm text-gray-400 font-semibold mt-1">
-                    ≈ ${(Number(total) || 0).toFixed(2)} USD
-                  </p>
-                )}
-              </>
-            ) : (
-              <>
-                <p className="flex justify-between font-black text-2xl">
-                  <span>Total a pagar:</span>
-                  <span className="text-kfc-red">${(Number(total) || 0).toFixed(2)}</span>
-                </p>
-                {tasa > 0 && (
-                  <p className="text-right text-sm text-gray-400 font-semibold mt-1">
-                    ≈ Bs {totalBs.toFixed(0)}
-                  </p>
-                )}
-              </>
+          <div className="bg-gray-50 text-gray-800 p-6 rounded-2xl border-2 border-gray-100 mt-8 shadow-sm relative overflow-hidden">
+            {metodo === 'delivery' && (
+              <div className="absolute top-0 left-0 w-full bg-yellow-100 text-yellow-800 text-[10px] font-bold text-center py-1.5 px-4 tracking-wide uppercase">
+                Costo de Delivery no incluido (Se calcula al asignar repartidor)
+              </div>
             )}
-            <p className="text-xs text-gray-500 mt-2 font-medium">
-              {esBs ? '📱 Pago en Bolívares (Pago Móvil)' : metodoPago === 'zelle' ? '💵 Pago en USD (Zelle)' : '💰 Pago en USD (Efectivo)'}
-            </p>
+            <div className={metodo === 'delivery' ? 'mt-4' : ''}>
+              {esBs ? (
+                <>
+                  <p className="flex justify-between items-center font-black text-2xl md:text-3xl">
+                    <span className="text-gray-500 text-lg">Total a pagar:</span>
+                    <span className="text-blue-600">
+                      {tasa > 0 ? `Bs ${totalBs.toFixed(0)}` : 'Cargando...'}
+                    </span>
+                  </p>
+                  {tasa > 0 && (
+                    <p className="text-right text-sm text-gray-400 font-bold mt-1">
+                      ≈ ${(Number(total) || 0).toFixed(2)} USD
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="flex justify-between items-center font-black text-2xl md:text-3xl">
+                    <span className="text-gray-500 text-lg">Total a pagar:</span>
+                    <span className="text-green-600">${(Number(total) || 0).toFixed(2)}</span>
+                  </p>
+                  {tasa > 0 && (
+                    <p className="text-right text-sm text-gray-400 font-bold mt-1">
+                      ≈ Bs {totalBs.toFixed(0)}
+                    </p>
+                  )}
+                </>
+              )}
+              <p className="text-xs text-gray-400 mt-3 font-semibold pb-2 border-b border-gray-200">
+                {esBs ? '📱 Pago en Bolívares (Pago Móvil)' : metodoPago === 'zelle' ? '💵 Pago en USD (Zelle)' : '💰 Pago en USD (Efectivo)'}
+              </p>
+            </div>
           </div>
 
           <button
-            onClick={enviarPedido}
-            className="w-full bg-kfc-red text-white py-4 rounded-xl font-bold text-xl shadow-md mt-6 hover:bg-red-700 transition-colors"
+            onClick={() => {
+              if (!datos.nombre || !datos.apellido || !datos.telefono) {
+                alert("Por favor completa tu nombre, apellido y teléfono.");
+                return;
+              }
+              setMostrarAlertaWP(true);
+            }}
+            className="w-full bg-[#25D366] text-white py-4 rounded-xl font-bold text-xl shadow-[0_4px_15px_rgba(37,211,102,0.4)] mt-6 hover:bg-[#1ebd59] btn-press flex items-center justify-center gap-2 transition-all"
           >
-            Confirmar y enviar WhatsApp
+            Confirmar y enviar por WhatsApp
           </button>
         </div>
       </div>
+
+      {/* Alerta WhatsApp */}
+      {mostrarAlertaWP && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-scale-in text-center p-6">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <IconCheckCircle className="w-8 h-8 text-[#25D366]" />
+            </div>
+            <h3 className="font-black text-xl text-gray-800 mb-2">¡Todo listo para pedir!</h3>
+            <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+              Vamos a redirigirte a WhatsApp para que envíes tu pedido y comprobante de pago. 
+              <br/><br/>
+              <span className="font-bold text-kfc-red">¡MUY IMPORTANTE!</span><br/>
+              Cuando termines en WhatsApp, <span className="font-bold text-gray-800">regresa a esta página</span> para hacer el seguimiento en tiempo real de tu delivery.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  setMostrarAlertaWP(false);
+                  enviarPedido();
+                }}
+                className="w-full bg-[#25D366] text-white py-3 rounded-xl font-bold hover:bg-[#1ebd59] transition-colors shadow-m hover:shadow-lg"
+              >
+                Entendido, ir a WhatsApp
+              </button>
+              <button
+                onClick={() => setMostrarAlertaWP(false)}
+                className="w-full text-gray-400 font-bold py-2 hover:text-gray-600 transition-colors"
+              >
+                Cancelar y revisar pedido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

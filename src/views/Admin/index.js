@@ -6,7 +6,7 @@ import FormularioProducto from '../../Components/FormularioProducto';
 import LoginAdmin from './LoginAdmin';
 import { pedirPermisoNotificaciones, enviarNotificacion, getNotifPrefs, setNotifPrefs, useDetectarCambios } from '../../services/notificaciones';
 import { useTasa } from '../../hooks/useTasa';
-import { IconBell, IconLogout, IconClipboard, IconMotorbike, IconBurger, IconChart, IconDollar, IconPhone, IconMapPin, IconClock, IconStar, IconStarEmpty, IconCheckCircle, IconXCircle, IconRefresh, IconPlus, IconWarning, IconTruck, IconCopy, IconMessageCircle } from '../../Components/Icons';
+import { IconBell, IconLogout, IconClipboard, IconMotorbike, IconBurger, IconChart, IconDollar, IconPhone, IconMapPin, IconClock, IconStar, IconStarEmpty, IconCheckCircle, IconXCircle, IconRefresh, IconPlus, IconWarning, IconTruck, IconCopy, IconMessageCircle, IconClose } from '../../Components/Icons';
 
 function Admin() {
   const { tasa, modo: modoTasa, ultimaActualizacion, cargando: cargandoTasa, error: errorTasa, actualizarBCV, guardarTasaManual, cambiarModo, formatearBs, formatearUSD } = useTasa();
@@ -19,8 +19,37 @@ function Admin() {
   const [deliveries, setDeliveries] = useState([]);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [productoEditar, setProductoEditar] = useState(null);
-  const [ajustes, setAjustes] = useState({ permitirRechazarPedidos: false });
+  const [ajustes, setAjustes] = useState({ permitirRechazarPedidos: false, categorias: [] });
   const [pedidoACancelar, setPedidoACancelar] = useState(null); // ID of the order being cancelled
+  const [deliveryAsignar, setDeliveryAsignar] = useState(null);
+  const [costoDeliveryAux, setCostoDeliveryAux] = useState('');
+  const [nuevaCategoriaInput, setNuevaCategoriaInput] = useState('');
+
+  const categoriasDinamicas = ajustes?.categorias && ajustes.categorias.length > 0 ? ajustes.categorias : [
+    { value: 'hamburguesas', label: 'Hamburguesas', icon: '🍔' },
+    { value: 'pizzas', label: 'Pizzas', icon: '🍕' },
+    { value: 'pollo', label: 'Pollo', icon: '🍗' },
+    { value: 'perros', label: 'Hot Dogs', icon: '🌭' },
+    { value: 'bebidas', label: 'Bebidas', icon: '🥤' }
+  ];
+
+  const agregarCategoria = async () => {
+    if (!nuevaCategoriaInput.trim()) return;
+    const nuevaList = [...categoriasDinamicas, { 
+      value: nuevaCategoriaInput.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_'), 
+      label: nuevaCategoriaInput, 
+      icon: '🏷️' 
+    }];
+    await updateDoc(doc(db, "config", "ajustes"), { categorias: nuevaList });
+    setNuevaCategoriaInput('');
+  };
+
+  const eliminarCategoria = async (val) => {
+    if(window.confirm("¿Seguro que deseas eliminar esta categoría?")) {
+      const nuevaList = categoriasDinamicas.filter(c => c.value !== val);
+      await updateDoc(doc(db, "config", "ajustes"), { categorias: nuevaList });
+    }
+  };
 
   const copiarTexto = (texto) => {
     navigator.clipboard.writeText(texto);
@@ -119,12 +148,23 @@ function Admin() {
     });
   };
 
-  const asignarPedido = async (pedidoId, deliveryUid, deliveryNombre) => {
+  const asignarPedido = (pedidoId, deliveryUid, deliveryNombre) => {
+    setDeliveryAsignar({ pedidoId, deliveryUid, deliveryNombre });
+  };
+
+  const confirmarAsignarPedido = async () => {
+    if (!deliveryAsignar) return;
+    const { pedidoId, deliveryUid, deliveryNombre } = deliveryAsignar;
+    const costo = parseFloat(costoDeliveryAux) || 0;
+    
     await updateDoc(doc(db, "pedidos", pedidoId), {
       asignadoA: deliveryUid,
       asignadoNombre: deliveryNombre,
       estado: 'asignado',
+      costoDelivery: costo,
     });
+    setDeliveryAsignar(null);
+    setCostoDeliveryAux('');
   };
 
   const cancelarPedido = async (pedidoId) => {
@@ -393,7 +433,7 @@ function Admin() {
             { key: 'pedidos', Icon: IconClipboard, label: 'Pedidos', count: pedidos.filter(p => p.estado === 'pendiente').length },
             { key: 'repartidores', Icon: IconMotorbike, label: 'Repartid.', badge: deliveriesPendientes.length },
             { key: 'productos', Icon: IconBurger, label: 'Productos' },
-            { key: 'tasa', Icon: IconDollar, label: 'Tasa' },
+            { key: 'tasa', Icon: IconDollar, label: 'Configuración' },
             { key: 'estadisticas', Icon: IconChart, label: 'Stats' },
           ].map(t => (
             <button
@@ -455,14 +495,8 @@ function Admin() {
               <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-gray-700">Filtros</h3>
-                  <button
-                    onClick={limpiarEntregados}
-                    className="text-sm bg-red-50 text-red-600 px-3 py-1 rounded-lg font-bold hover:bg-red-100 transition-colors"
-                  >
-                    Limpiar entregados
-                  </button>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {/* Filtro estado */}
                   <select
                     value={filtroEstado}
@@ -863,6 +897,43 @@ function Admin() {
                 </div>
               </label>
             </div>
+
+            {/* Gestor de Categorías */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h3 className="font-bold text-lg text-gray-800 mb-4 flex items-center gap-2">
+                 <IconBurger className="w-5 h-5 text-kfc-red" /> Categorías del Menú
+              </h3>
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  placeholder="Ej: Ofertas Especiales"
+                  value={nuevaCategoriaInput}
+                  onChange={(e) => setNuevaCategoriaInput(e.target.value)}
+                  className="flex-1 border border-gray-200 p-3 rounded-xl font-medium outline-none focus:ring-2 focus:ring-kfc-red/30 focus:border-kfc-red bg-gray-50"
+                />
+                <button
+                  onClick={agregarCategoria}
+                  className="bg-kfc-dark text-white px-6 rounded-xl font-bold hover:bg-gray-800 transition-all btn-press shrink-0"
+                >
+                  Agregar
+                </button>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                {categoriasDinamicas.map(c => (
+                  <div key={c.value} className="bg-gray-100 pl-3 pr-1 py-1 rounded-full flex items-center gap-2 shadow-sm border border-gray-200">
+                    <span className="text-sm font-bold text-gray-700">{c.icon} {c.label}</span>
+                    <button 
+                      onClick={() => eliminarCategoria(c.value)}
+                      className="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
+                      title="Eliminar categoría"
+                    >
+                      <IconClose className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -873,39 +944,35 @@ function Admin() {
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center col-span-2">
                 <p className="text-xs text-gray-400 font-bold uppercase mb-2">Hoy</p>
-                <div className="flex justify-around">
-                  <div>
-                    <p className="text-2xl font-black text-kfc-red">{pedidosHoy.length}</p>
-                    <p className="text-xs text-gray-500 font-medium">Pedidos</p>
+                <div className="grid grid-cols-3 gap-2 w-full">
+                  <div className="bg-gray-50 rounded-lg p-2 flex flex-col items-center justify-center">
+                    <p className="text-xl md:text-2xl font-black text-kfc-red">{pedidosHoy.length}</p>
+                    <p className="text-[10px] md:text-xs text-gray-500 font-medium">Pedidos</p>
                   </div>
-                  <div className="w-px bg-gray-100" />
-                  <div>
-                    <p className="text-2xl font-black text-green-600">${formatearUSD(revHoy.usd)}</p>
-                    <p className="text-xs text-gray-500 font-medium">USD (Zelle/Efectivo)</p>
+                  <div className="bg-gray-50 rounded-lg p-2 flex flex-col items-center justify-center">
+                    <p className="text-xl md:text-2xl font-black text-green-600">${formatearUSD(revHoy.usd)}</p>
+                    <p className="text-[10px] md:text-xs text-gray-500 font-medium">USD</p>
                   </div>
-                  <div className="w-px bg-gray-100" />
-                  <div>
-                    <p className="text-2xl font-black text-yellow-600">Bs {formatearBs(revHoy.bs)}</p>
-                    <p className="text-xs text-gray-500 font-medium">Bs (Pago Móvil)</p>
+                  <div className="bg-gray-50 rounded-lg p-2 flex flex-col items-center justify-center">
+                    <p className="text-xl md:text-2xl font-black text-yellow-600">Bs{formatearBs(revHoy.bs)}</p>
+                    <p className="text-[10px] md:text-xs text-gray-500 font-medium">Bs</p>
                   </div>
                 </div>
               </div>
               <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center col-span-2">
                 <p className="text-xs text-gray-400 font-bold uppercase mb-2">Última Semana</p>
-                <div className="flex justify-around">
-                  <div>
-                    <p className="text-2xl font-black text-blue-600">{pedidosSemana.length}</p>
-                    <p className="text-xs text-gray-500 font-medium">Pedidos</p>
+                <div className="grid grid-cols-3 gap-2 w-full">
+                  <div className="bg-gray-50 rounded-lg p-2 flex flex-col items-center justify-center">
+                    <p className="text-xl md:text-2xl font-black text-blue-600">{pedidosSemana.length}</p>
+                    <p className="text-[10px] md:text-xs text-gray-500 font-medium">Pedidos</p>
                   </div>
-                  <div className="w-px bg-gray-100" />
-                  <div>
-                    <p className="text-2xl font-black text-purple-600">${formatearUSD(revSemana.usd)}</p>
-                    <p className="text-xs text-gray-500 font-medium">USD (Zelle/Efectivo)</p>
+                  <div className="bg-gray-50 rounded-lg p-2 flex flex-col items-center justify-center">
+                    <p className="text-xl md:text-2xl font-black text-purple-600">${formatearUSD(revSemana.usd)}</p>
+                    <p className="text-[10px] md:text-xs text-gray-500 font-medium">USD</p>
                   </div>
-                  <div className="w-px bg-gray-100" />
-                  <div>
-                    <p className="text-2xl font-black text-orange-500">Bs {formatearBs(revSemana.bs)}</p>
-                    <p className="text-xs text-gray-500 font-medium">Bs (Pago Móvil)</p>
+                  <div className="bg-gray-50 rounded-lg p-2 flex flex-col items-center justify-center">
+                    <p className="text-xl md:text-2xl font-black text-orange-500">Bs{formatearBs(revSemana.bs)}</p>
+                    <p className="text-[10px] md:text-xs text-gray-500 font-medium">Bs</p>
                   </div>
                 </div>
               </div>
@@ -964,7 +1031,53 @@ function Admin() {
         <FormularioProducto
           cerrar={() => { setMostrarForm(false); setProductoEditar(null); }}
           productoEditar={productoEditar}
+          categorias={categoriasDinamicas}
         />
+      )}
+
+      {/* Modal para Ajustar Cobro de Delivery al Asignar */}
+      {deliveryAsignar && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-scale-in p-6">
+            <h3 className="font-black text-xl text-gray-800 mb-2">Asignar Repartidor</h3>
+            <p className="text-gray-500 text-sm mb-4">
+              Vas a asignar este pedido a <strong className="text-kfc-dark">{deliveryAsignar.deliveryNombre}</strong>.
+            </p>
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-700 mb-1">Costo a cobrar por Delivery</label>
+              <div className="flex bg-gray-50 rounded-xl overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-kfc-red/30 focus-within:border-kfc-red transition-all">
+                <span className="flex items-center px-4 bg-gray-100 text-gray-500 font-bold border-r border-gray-200">
+                  <IconDollar className="w-4 h-4" />
+                </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={costoDeliveryAux}
+                  onChange={(e) => setCostoDeliveryAux(e.target.value)}
+                  placeholder="Ej: 2.00"
+                  className="w-full p-3 outline-none text-lg font-bold text-gray-800 bg-transparent"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-2">Monto que se le informará al repartidor que le debe cobrar extra al cliente.</p>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={confirmarAsignarPedido}
+                className="flex-1 bg-kfc-red text-white py-3 rounded-xl font-bold hover:bg-red-700 transition-colors shadow-sm"
+              >
+                Confirmar Asignación
+              </button>
+              <button
+                onClick={() => setDeliveryAsignar(null)}
+                className="bg-gray-200 text-gray-700 px-4 py-3 rounded-xl font-bold hover:bg-gray-300 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

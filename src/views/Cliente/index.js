@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../services/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, doc } from 'firebase/firestore';
 import CarritoFlotante from '../../Components/CarritoFlotante';
 import ModalCarrito from '../../Components/ModalCarrito';
 import Checkout from './Checkout';
@@ -9,18 +9,12 @@ import ModalPersonalizar from '../../Components/ModalPersonalizar';
 import { IconPlus, IconSearch, IconPackage } from '../../Components/Icons';
 import { useTasa } from '../../hooks/useTasa';
 
-const CATEGORIAS = [
-  { value: 'todos', label: 'Todo' },
-  { value: 'hamburguesas', label: 'Burgers' },
-  { value: 'pizzas', label: 'Pizzas' },
-  { value: 'pollo', label: 'Pollo' },
-  { value: 'perros', label: 'Hot Dogs' },
-  { value: 'tacos', label: 'Tacos' },
-  { value: 'ensaladas', label: 'Ensaladas' },
-  { value: 'bebidas', label: 'Bebidas' },
-  { value: 'postres', label: 'Postres' },
-  { value: 'combos', label: 'Combos' },
-  { value: 'otros', label: 'Otros' },
+const CATEGORIAS_FALLBACK = [
+  { value: 'hamburguesas', label: 'Hamburguesas', icon: '🍔' },
+  { value: 'pizzas', label: 'Pizzas', icon: '🍕' },
+  { value: 'pollo', label: 'Pollo', icon: '🍗' },
+  { value: 'perros', label: 'Hot Dogs', icon: '🌭' },
+  { value: 'bebidas', label: 'Bebidas', icon: '🥤' }
 ];
 
 const IMG_DEFAULT = {
@@ -54,14 +48,28 @@ function Cliente() {
   const [busqueda, setBusqueda] = useState('');
   const [productoPersonalizar, setProductoPersonalizar] = useState(null);
 
+  const [ajustes, setAjustes] = useState(null);
+
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "productos"), (snapshot) => {
       const docs = [];
       snapshot.forEach((doc) => docs.push({ ...doc.data(), id: doc.id }));
       setProductos(docs);
     });
-    return () => unsub();
+
+    const unsubAjustes = onSnapshot(doc(db, "config", "ajustes"), (docSnap) => {
+      if (docSnap.exists()) {
+        setAjustes(docSnap.data());
+      }
+    });
+
+    return () => {
+      unsub();
+      unsubAjustes();
+    };
   }, []);
+
+  const categoriasDinamicas = ajustes?.categorias && ajustes.categorias.length > 0 ? ajustes.categorias : CATEGORIAS_FALLBACK;
 
   useEffect(() => {
     localStorage.setItem('carrito-fastfood', JSON.stringify(carrito));
@@ -183,9 +191,9 @@ function Cliente() {
               const imgSrc = producto.imagen || IMG_DEFAULT[producto.categoria] || IMG_DEFAULT.otros;
 
               return (
-                <div key={producto.id} className="bg-white rounded-2xl shadow-card overflow-hidden product-card animate-fade-in">
+                <div key={producto.id} className="bg-white rounded-2xl shadow-card overflow-hidden product-card animate-fade-in flex flex-col">
                   {/* Image */}
-                  <div className="relative h-44 overflow-hidden group">
+                  <div className="relative h-44 overflow-hidden group shrink-0">
                     <img
                       src={imgSrc}
                       alt={producto.nombre}
@@ -195,7 +203,7 @@ function Cliente() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
                     {producto.categoria && (
                       <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-gray-800 text-xs px-3 py-1 rounded-full font-semibold shadow-sm">
-                        {CATEGORIAS.find(c => c.value === producto.categoria)?.icon} {CATEGORIAS.find(c => c.value === producto.categoria)?.label || producto.categoria}
+                        {categoriasDinamicas.find(c => c.value === producto.categoria)?.icon || '🏷️'} {categoriasDinamicas.find(c => c.value === producto.categoria)?.label || producto.categoria}
                       </span>
                     )}
                     <div className="absolute bottom-3 right-3 text-right">
@@ -211,11 +219,13 @@ function Cliente() {
                   </div>
 
                   {/* Info */}
-                  <div className="p-4">
-                    <h3 className="font-bold text-lg text-gray-800 leading-tight">{producto.nombre}</h3>
-                    {producto.descripcion && (
-                      <p className="text-gray-400 text-sm mt-1 line-clamp-2 leading-relaxed">{producto.descripcion}</p>
-                    )}
+                  <div className="p-4 flex flex-col grow">
+                    <div className="grow">
+                      <h3 className="font-bold text-lg text-gray-800 leading-tight">{producto.nombre}</h3>
+                      {producto.descripcion && (
+                        <p className="text-gray-400 text-sm mt-1 line-clamp-2 leading-relaxed">{producto.descripcion}</p>
+                      )}
+                    </div>
 
                     <div className="flex justify-end items-center mt-4">
                       {cant === 0 ? (

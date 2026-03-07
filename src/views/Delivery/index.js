@@ -319,82 +319,13 @@ function Delivery() {
         {/* Global Ya Llegué Banner Button */}
         {perfil.estadoDelivery === 'entregando' && !tienePedidoActivo && (
           <div className="mb-6">
-            <button
-              onClick={marcarEnTienda}
-              className="w-full bg-white border-2 border-green-500 py-6 rounded-3xl shadow-[0_8px_0_rgb(22,163,74)] hover:shadow-[0_4px_0_rgb(22,163,74)] hover:translate-y-[4px] active:shadow-none active:translate-y-[8px] transition-all flex flex-col items-center justify-center group overflow-hidden relative"
-            >
-              {/* Subtle pattern background */}
-              <div className="absolute inset-0 bg-green-50 opacity-40 group-hover:bg-green-100 transition-colors"></div>
-              
-              <div className="relative z-10 flex flex-col items-center">
-                <div className="bg-green-500 p-3 rounded-full mb-3 shadow-md group-hover:scale-110 transition-transform">
-                  <IconCheckCircle className="w-8 h-8 text-white" />
-                </div>
-                <span className="text-green-700 font-black text-xl tracking-tighter uppercase">AVISAR QUE LLEGUÉ</span>
-                <span className="text-green-600/60 text-xs font-black mt-1 uppercase tracking-[0.2em] animate-pulse">
-                  Toca aquí para recibir pedidos
-                </span>
-              </div>
-            </button>
+            <SwipeSlider 
+              onSwipeSuccess={marcarEnTienda} 
+              text="Desliza cuando regreses a la tienda" 
+            />
           </div>
         )}
 
-        {/* Modal de Pedidos Entrantes (Nuevos Asignados) - Only show in its tab */}
-        {pedidosEntrantes.length > 0 && filtro === 'asignado' && (
-          <div className="mb-6 space-y-4">
-            {pedidosEntrantes.map(pedido => (
-              <div key={pedido.id} className="bg-kfc-dark text-white rounded-2xl p-5 shadow-lg border-2 border-yellow-400 relative overflow-hidden animate-slide-in">
-                <div className="absolute -right-4 -top-4 w-24 h-24 bg-yellow-400 rounded-full opacity-10 animate-ping"></div>
-                <h3 className="text-xl font-black flex items-center gap-2 mb-3 text-yellow-400">
-                  <IconBell className="w-6 h-6 animate-swing" /> ¡Te han asignado un pedido!
-                </h3>
-                
-                <div className="space-y-2 mb-5 z-10 relative">
-                  <p className="font-bold text-lg">{pedido.cliente}</p>
-                  <p className="text-sm text-gray-300 flex items-center gap-1.5"><IconMapPin className="w-4 h-4 text-gray-400" /> {pedido.direccion}</p>
-                  <p className="text-sm text-gray-300 flex items-center gap-1.5"><IconPhone className="w-4 h-4 text-gray-400" /> {pedido.telefono}</p>
-                  
-                  <div className="bg-white/10 rounded-lg p-3 mt-3">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm font-bold text-gray-300">Total a cobrar:</span>
-                      <div className="text-right">
-                        {pedido.metodoPago === 'pago_movil' ? (
-                          <span className="text-xl font-black text-yellow-300">
-                            Bs {formatearBs(pedido.totalBs || (tasa > 0 ? (Number(pedido.total) || 0) * tasa : 0))}
-                          </span>
-                        ) : (
-                          <span className="text-xl font-black text-green-400">
-                            ${formatearUSD(pedido.total)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {pedido.metodoPago && (
-                      <p className="text-xs text-blue-300 font-medium">Método: {pedido.metodoPago === 'efectivo' ? 'Efectivo USD' : pedido.metodoPago === 'pago_movil' ? 'Pago Móvil' : 'Zelle'}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex gap-3 relative z-10">
-                  <button
-                    onClick={() => cambiarEstado(pedido.id, 'en_camino')}
-                    className="flex-1 bg-green-500 text-white py-3 rounded-xl font-bold hover:bg-green-600 active:scale-95 transition-all"
-                  >
-                    Tomar pedido
-                  </button>
-                  {ajustes.permitirRechazarPedidos && (
-                    <button
-                      onClick={() => rechazarPedido(pedido.id)}
-                      className="flex-1 bg-red-500/20 text-red-300 py-3 rounded-xl font-bold border border-red-500/30 hover:bg-red-500/30 active:scale-95 transition-all"
-                    >
-                      Rechazar
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* Filtros */}
         <div className="flex gap-1.5 mb-6 overflow-x-auto pb-2 scrollbar-hide bg-white p-1.5 rounded-2xl shadow-card">
@@ -457,6 +388,61 @@ function Delivery() {
         {/* Lista de pedidos */}
         {filtro !== 'stats' && (
         <div className="space-y-4">
+          {pedidosEntrantes.length > 0 && filtro === 'asignado' && (
+            <div className="mb-6 space-y-4">
+              {pedidosEntrantes.map(pedido => (
+                <div key={pedido.id} className="bg-kfc-dark text-white rounded-2xl p-5 shadow-lg border border-gray-800 relative overflow-hidden animate-slide-in">
+                  <h3 className="text-xl font-black flex items-center gap-2 mb-3 text-yellow-400">
+                    <IconMotorbike className="w-6 h-6" /> Tienes una asignación
+                  </h3>
+                  
+                  <div className="space-y-2 mb-5 z-10 relative">
+                    <p className="font-bold text-lg">{pedido.cliente}</p>
+                    <p className="text-sm text-gray-300 flex items-center gap-1.5"><IconMapPin className="w-4 h-4 text-gray-400" /> {pedido.direccion}</p>
+                    <p className="text-sm text-gray-300 flex items-center gap-1.5"><IconPhone className="w-4 h-4 text-gray-400" /> {pedido.telefono}</p>
+                    
+                    <div className="bg-white/10 rounded-lg p-3 mt-3">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm font-bold text-gray-300">Total a cobrar:</span>
+                        <div className="text-right">
+                          {pedido.metodoPago === 'pago_movil' ? (
+                            <span className="text-xl font-black text-yellow-300">
+                              Bs {formatearBs((pedido.totalBs || 0) + (tasa > 0 ? (Number(pedido.costoDelivery) || 0) * tasa : 0))}
+                            </span>
+                          ) : (
+                            <span className="text-xl font-black text-green-400">
+                              ${formatearUSD(Number(pedido.total) + Number(pedido.costoDelivery || 0))}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {pedido.metodoPago && (
+                        <p className="text-xs text-blue-300 font-medium">Método: {pedido.metodoPago === 'efectivo' ? 'Efectivo USD' : pedido.metodoPago === 'pago_movil' ? 'Pago Móvil' : 'Zelle'}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 relative z-10">
+                    <button
+                      onClick={() => cambiarEstado(pedido.id, 'en_camino')}
+                      className="flex-1 bg-green-500 text-white py-3 rounded-xl font-bold hover:bg-green-600 active:scale-95 transition-all"
+                    >
+                      Tomar pedido
+                    </button>
+                    {ajustes.permitirRechazarPedidos && (
+                      <button
+                        onClick={() => rechazarPedido(pedido.id)}
+                        className="flex-1 bg-red-500/20 text-red-300 py-3 rounded-xl font-bold border border-red-500/30 hover:bg-red-500/30 active:scale-95 transition-all"
+                      >
+                        Rechazar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {pedidosFiltrados.length === 0 ? (
             <div className="bg-white rounded-2xl p-10 text-center shadow-sm border border-gray-100">
               <p className="text-4xl mb-3"><IconClipboard className="w-10 h-10 mx-auto text-gray-300" /></p>
@@ -534,11 +520,11 @@ function Delivery() {
                     <div className="text-right">
                       {pedido.metodoPago === 'pago_movil' ? (
                         <span className="font-bold text-yellow-600">
-                          Bs {formatearBs(pedido.totalBs || (tasa > 0 ? (Number(pedido.total) || 0) * tasa : 0))}
+                          Bs {formatearBs((pedido.totalBs || 0) + (tasa > 0 ? (Number(pedido.costoDelivery) || 0) * tasa : 0))}
                         </span>
                       ) : (
                         <span className="font-bold text-kfc-red text-lg">
-                          ${formatearUSD(pedido.total)}
+                          ${formatearUSD(Number(pedido.total) + Number(pedido.costoDelivery || 0))}
                         </span>
                       )}
                     </div>
@@ -582,27 +568,19 @@ function Delivery() {
                       <div className="mt-4">
                         {pedido.ubicacion ? (
                           <div className="relative">
-                            <div className="rounded-xl overflow-hidden shadow-sm border border-gray-200 h-40 bg-gray-100 relative group">
-                              <div className="absolute inset-0 bg-[#e5e7eb] bg-[url('https://maps.googleapis.com/maps/api/staticmap?center=10.48,-66.90&zoom=13&size=600x300&scale=2&maptype=roadmap&key=AIzaSyA...')] bg-cover bg-center brightness-95"></div>
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="bg-white/90 p-3 rounded-full shadow-lg animate-bounce">
-                                  <IconMapPin className="w-8 h-8 text-kfc-red" />
-                                </div>
-                              </div>
-                            </div>
                             <a 
                               href={pedido.ubicacion} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="w-full mt-3 bg-blue-600 text-white py-3.5 rounded-xl font-black text-center flex items-center justify-center gap-2 shadow-lg hover:bg-blue-700 active:scale-95 transition-all"
+                              className="w-full mt-3 bg-blue-600 text-white py-4 rounded-xl font-black text-center flex items-center justify-center gap-2 shadow-lg hover:bg-blue-700 active:scale-95 transition-all"
                             >
-                               <IconNavigation className="w-5 h-5" /> ABRIR EN GOOGLE MAPS
+                               <IconNavigation className="w-6 h-6" /> ABRIR RUTA GPS EN GOOGLE MAPS
                             </a>
                           </div>
                         ) : (
-                          <div className="w-full h-32 flex flex-col items-center justify-center text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                            <IconMapPin className="w-8 h-8 opacity-50 mb-2" />
-                            <span className="text-sm font-bold opacity-50 uppercase tracking-widest">Ubicación no proporcionada</span>
+                          <div className="w-full h-24 flex flex-col items-center justify-center text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                            <IconMapPin className="w-6 h-6 opacity-50 mb-1" />
+                            <span className="text-xs font-bold opacity-50 uppercase tracking-widest">Ubicación visual no disponible</span>
                           </div>
                         )}
                       </div>
@@ -622,7 +600,11 @@ function Delivery() {
                   )}
                   {pedido.estado === 'en_camino' && filtro === 'todos' && (
                     <div className="space-y-4 pt-4 border-t border-gray-100 mt-2">
-                      <SwipeSlider onSwipeSuccess={() => cambiarEstado(pedido.id, 'entregado')} text="Desliza cuando entregues el pedido" />
+                      <SwipeSlider 
+                        onSwipeSuccess={() => cambiarEstado(pedido.id, 'entregado')} 
+                        text="Desliza para entregar pedido" 
+                        disabledUntil={pedido.fechaEnCamino ? new Date((pedido.fechaEnCamino.seconds ? pedido.fechaEnCamino.seconds * 1000 : new Date(pedido.fechaEnCamino).getTime()) + 5 * 60000) : null}
+                      />
                       {tiempoEntrega(pedido) && (
                         <p className="text-center text-xs text-gray-500 font-bold uppercase tracking-wider">Tiempo del viaje: {tiempoEntrega(pedido)}</p>
                       )}
